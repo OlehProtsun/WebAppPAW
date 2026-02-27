@@ -16,6 +16,7 @@ export function ProjectForm({ initial = null, onSubmit, onCancel, submitText }: 
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [error, setError] = useState<string | null>(null);
+
   const title = useMemo(() => (initial ? "Edit project" : "Create project"), [initial]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -29,6 +30,8 @@ export function ProjectForm({ initial = null, onSubmit, onCancel, submitText }: 
     }
 
     await onSubmit(res.value);
+
+    // clear тільки для create
     if (!initial) {
       setName("");
       setDescription("");
@@ -36,26 +39,64 @@ export function ProjectForm({ initial = null, onSubmit, onCancel, submitText }: 
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10, padding: 12, border: "1px solid #333", borderRadius: 12 }}>
-      <div style={{ fontWeight: 700 }}>{title}</div>
+    <form onSubmit={handleSubmit} className="card stack" style={{ gap: 12 }}>
+      <div className="row">
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
+          <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+            {initial ? "Update name and description and save changes." : "Fill in the fields and create a new project."}
+          </div>
+        </div>
 
-      <label style={{ display: "grid", gap: 6 }}>
-        <div>Name</div>
+        {initial && onCancel && (
+          <Button type="button" onClick={onCancel}>
+            Close
+          </Button>
+        )}
+      </div>
+
+      <label className="stack" style={{ gap: 6 }}>
+        <div style={{ fontWeight: 700 }}>Name</div>
         <Input value={name} onChange={e => setName(e.target.value)} placeholder="E.g. Website redesign" />
       </label>
 
-      <label style={{ display: "grid", gap: 6 }}>
-        <div>Description</div>
-        <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="Short description..." />
+      <label className="stack" style={{ gap: 6 }}>
+        <div style={{ fontWeight: 700 }}>Description</div>
+        <Textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          rows={4}
+          placeholder="Short description..."
+        />
       </label>
 
-      {error && <div style={{ color: "crimson" }}>{error}</div>}
+      {error && (
+        <div
+          className="card card-sm"
+          style={{
+            borderColor: "rgba(255,59,48,0.35)",
+            background: "rgba(255,59,48,0.06)",
+          }}
+        >
+          <div style={{ fontWeight: 800 }}>Error</div>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {error}
+          </div>
+        </div>
+      )}
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 10 }}>
         <Button type="submit">{submitText ?? (initial ? "Save" : "Create")}</Button>
-        {onCancel && (
-          <Button type="button" onClick={onCancel}>
-            Cancel
+        {!initial && (
+          <Button
+            type="button"
+            onClick={() => {
+              setName("");
+              setDescription("");
+              setError(null);
+            }}
+          >
+            Clear
           </Button>
         )}
       </div>
