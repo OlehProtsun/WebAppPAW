@@ -9,10 +9,26 @@
   --border: rgba(0, 0, 0, 0.08);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
 
-  --radius-lg: 20px;
-  --radius-md: 14px;
+  --radius-lg: 28px;
+  --radius-md: 22px;
 
-  --focus: rgba(0, 122, 255, 0.35); /* iOS blue focus */
+  --focus: rgba(0, 47, 255, 0.35); /* iOS blue focus */
+
+  /* Button colors */
+  --btn-primary-bg: #007aff;          /* iOS blue */
+  --btn-primary-bg-hover: #0a84ff;
+  --btn-primary-text: #ffffff;
+
+  --btn-danger-bg: #ff3b30;           /* iOS red */
+  --btn-danger-bg-hover: #ff453a;
+  --btn-danger-text: #ffffff;
+
+  --btn-neutral-bg: rgba(0, 0, 0, 0.06);
+  --btn-neutral-bg-hover: rgba(0, 0, 0, 0.09);
+  --btn-neutral-text: #111111;
+
+  --btn-shadow: 0 8px 20px rgba(0, 0, 0, 0.10);
+
 }
 
 * { box-sizing: border-box; }
@@ -72,29 +88,57 @@ body {
 
 .input:focus, .textarea:focus {
   border-color: rgba(0, 122, 255, 0.35);
-  box-shadow: 0 0 0 4px var(--focus);
+  box-shadow: 0 0 0 2px var(--focus);
 }
 
 /* buttons */
+/* neutral buttons */
 .btn {
   padding: 10px 14px;
-  border-radius: 999px; /* pill */
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(0, 122, 255, 0.12);
+
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+
   cursor: pointer;
-  font-weight: 600;
-  transition: transform 0.05s ease, background 0.2s ease;
+  font-weight: 700;
+  font-size: 14px;
+
+  transition: transform 0.06s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.btn:hover { background: rgba(0, 122, 255, 0.18); }
-.btn:active { transform: scale(0.98); }
+.btn:hover {
+  background: rgba(0, 0, 0, 0.09);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
 
+.btn:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Delete button — red */
 .btn-danger {
-  background: rgba(255, 59, 48, 0.12);
+  background: rgba(255, 59, 48, 0.14);
+  border-color: rgba(255, 59, 48, 0.22);
+  color: #d70015;
 }
 
 .btn-danger:hover {
-  background: rgba(255, 59, 48, 0.18);
+  background: rgba(255, 59, 48, 0.20);
+  box-shadow: 0 10px 24px rgba(255, 59, 48, 0.10);
 }
 
 .muted { color: var(--muted); }
@@ -121,24 +165,148 @@ body {
   align-items: center;
 }
 
+/* tabs styled like buttons */
 .tab {
   display: inline-flex;
   align-items: center;
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.65);
-  text-decoration: none;
+
+  background: rgba(0, 0, 0, 0.06);   /* same as .btn */
   color: var(--text);
+
+  text-decoration: none;
   font-weight: 700;
   font-size: 14px;
-  transition: transform 0.05s ease, background 0.2s ease;
+
+  transition: transform 0.06s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.tab:hover { background: rgba(255, 255, 255, 0.85); }
-.tab:active { transform: scale(0.98); }
+.tab:hover {
+  background: rgba(0, 0, 0, 0.09);   /* same as .btn:hover */
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
 
+.tab:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+/* active tab — slightly stronger neutral (no blue) */
 .tab-active {
-  background: rgba(0, 122, 255, 0.14);
-  border-color: rgba(0, 122, 255, 0.18);
+  background: rgba(0, 0, 0, 0.12);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(6px);
+  z-index: 30;
+}
+
+.confirm-dialog {
+  width: min(100%, 420px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.confirm-dialog-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.confirm-dialog-description {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.confirm-dialog-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 2-column layout for Projects page */
+.two-col {
+  display: grid;
+  grid-template-columns: 500px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* responsive: on small screens stack */
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* optional: keep form visible while scrolling list */
+.sticky {
+  position: sticky;
+  top: 74px; /* adjust if your topbar height differs */
+}
+
+/* LEFT column: pinned + header on top + form vertically centered */
+.projects-left {
+  position: sticky;
+  top: 74px;                   /* <-- відступ від верху (під topbar). Підкрути 60-90px */
+  align-self: start;
+
+  display: grid;
+  grid-template-rows: auto 1fr; /* header + body */
+  gap: 16px;
+
+  /* щоб було що центрувати по висоті і щоб sticky виглядав “приклеєним” */
+  height: calc(100dvh - 94px);  /* <-- підкрути разом з top */
+}
+
+.projects-left-body {
+  display: grid;
+  align-items: center;          /* вертикальне центрування форми */
+}
+
+/* optional: limit form width */
+.projects-left-body > * {
+  max-width: 520px;
+}
+
+/* responsive: on small screens disable pin + centering */
+@media (max-width: 900px) {
+  .projects-left {
+    position: static;
+    height: auto;
+  }
+  .projects-left-body {
+    align-items: start;
+  }
+  .projects-left-body > * {
+    max-width: none;
+  }
+}
+
+.page-header-full {
+  width: 100vw;
+  margin-left: calc(50% - 50vw); /* вихід за container */
+  padding: 14px 16px 6px;        /* зліва як у topbar */
+}
+
+.page-header-title {
+  margin: 0;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.page-header-subtitle {
+  margin-top: 6px;
 }
