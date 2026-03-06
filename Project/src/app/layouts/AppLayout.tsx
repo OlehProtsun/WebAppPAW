@@ -1,73 +1,111 @@
-// Імпортуємо NavLink та Outlet з react-router.
-// - NavLink: спеціальний компонент-посилання, який "знає", чи активний він зараз (відповідає поточному маршруту),
-//   і дозволяє зручно стилізувати активну вкладку.
-// - Outlet: "плейсхолдер" для вкладених маршрутів — тут буде рендеритись контент дочірніх сторінок.
-import { NavLink, Outlet } from "react-router";
+﻿import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Outlet, useNavigate } from "react-router";
+import { ActiveProjectApi, ProjectsApi } from "@entities/project";
+import { CurrentUserManager } from "@entities/user";
+import { LocalStorageClient } from "@shared/api/localStorageClient";
+import { qk } from "@shared/lib/queryKeys";
+import { Button } from "@shared/ui/Button";
+import { Select } from "@shared/ui/Select";
 
-// Описуємо набір вкладок для верхнього меню (tabs).
-// Тип: масив об’єктів, де кожна вкладка має:
-// - to: шлях маршруту, куди веде вкладка,
-// - label: текст, який бачить користувач,
-// - end?: опційний прапорець для точного збігу маршруту (важливо для "/").
-//
-// end=true означає:
-// вкладка буде активною лише тоді, коли шлях збігається точно ("/"),
-// а не коли поточний маршрут починається з "/" (бо це було б завжди).
-const tabs: Array<{ to: string; label: string; end?: boolean }> = [
-  { to: "/", label: "Home", end: true },      // Головна сторінка: точний збіг маршруту "/"
-  { to: "/projects", label: "Projects" },     // Сторінка проєктів: для цього end не потрібен
-];
-
-// Основний компонент макету додатку.
-// Він задає спільну "рамку" сторінок: верхню панель з вкладками + контейнер для контенту сторінок.
 export function AppLayout() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const storage = useMemo(() => new LocalStorageClient(), []);
+  const projectsApi = useMemo(() => new ProjectsApi(storage), [storage]);
+  const activeProjectApi = useMemo(() => new ActiveProjectApi(storage), [storage]);
+  const currentUserManager = useMemo(() => new CurrentUserManager(), []);
+
+  const currentUserQuery = useQuery({
+    queryKey: qk.currentUser,
+    queryFn: () => currentUserManager.getCurrentUser(),
+  });
+
+  const projectsQuery = useQuery({
+    queryKey: qk.projects,
+    queryFn: () => projectsApi.list(),
+  });
+
+  const activeProjectQuery = useQuery({
+    queryKey: qk.activeProject,
+    queryFn: () => activeProjectApi.get(),
+  });
+
+  const selectProjectMutation = useMutation({
+    mutationFn: (projectId: string | null) => activeProjectApi.set(projectId),
+    onSuccess: async projectId => {
+      queryClient.setQueryData(qk.activeProject, projectId);
+      await queryClient.invalidateQueries({ queryKey: qk.activeProject });
+    },
+  });
+
+  const currentUserName = currentUserQuery.data
+    ? `${currentUserQuery.data.firstName} ${currentUserQuery.data.lastName}`
+    : "Loading...";
+  const projectOptions = projectsQuery.data ?? [];
+  const activeProjectId = activeProjectQuery.data ?? null;
+  const projectPlaceholder = projectsQuery.isLoading
+    ? "Loading projects..."
+    : projectOptions.length > 0
+      ? "Choose a project"
+      : "No projects available";
+
   return (
     <div>
-      {/* Верхній хедер (topbar) — зазвичай тут навігація/меню */}
       <header className="topbar">
-        {/* Внутрішній контейнер topbar (наприклад, для вирівнювання контенту по ширині) */}
-        <div className="topbar-inner">
-          {/* Контейнер для вкладок */}
-          <div className="tabs">
-            {/* Генеруємо вкладки на основі масиву tabs.
-                Це зручно: щоб додати/прибрати вкладку, достатньо змінити масив, а не JSX вручну. */}
-            {tabs.map(t => (
-              <NavLink
-                // key потрібен React для коректного відстеження елементів списку під час ререндерів.
-                key={t.to}
-                // to — шлях, куди веде вкладка.
-                to={t.to}
-                // end — передаємо прапорець точного збігу маршруту (актуально для "/").
-                end={t.end}
-                // className тут задається функцією, яка отримує стан посилання.
-                // react-router передає об’єкт з прапорцем isActive:
-                // - isActive=true, якщо маршрут цього NavLink відповідає поточному URL.
-                //
-                // Ми завжди додаємо базовий клас "tab",
-                // і якщо вкладка активна — додаємо "tab-active" для стилізації активної вкладки.
-                className={({ isActive }) =>
-                  `tab ${isActive ? "tab-active" : ""}`
-                }
+        <div className="topbar-shell">
+          <div className="topbar-meta">
+            <div className="topbar-project-group">
+              <label className="topbar-project">
+                <span className="topbar-label">Selected project</span>
+                <Select
+                  className="topbar-select"
+                  value={activeProjectId ?? ""}
+                  disabled={
+                    projectsQuery.isLoading ||
+                    selectProjectMutation.isPending ||
+                    projectOptions.length === 0
+                  }
+                  onChange={event => {
+                    const value = event.target.value;
+                    selectProjectMutation.mutate(value || null);
+                    navigate(value ? `/projects/${value}` : "/projects");
+                  }}
+                >
+                  <option value="">{projectPlaceholder}</option>
+                  {projectOptions.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <Button
+                type="button"
+                className="topbar-open-btn"
+                onClick={() => {
+                  if (!activeProjectId) {
+                    return;
+                  }
+
+                  navigate(`/projects/${activeProjectId}`);
+                }}
+                disabled={!activeProjectId}
               >
-                {/* Підпис вкладки, який бачить користувач */}
-                {t.label}
-              </NavLink>
-            ))}
+                Open
+              </Button>
+            </div>
+
+            <div className="topbar-user">
+              <span className="topbar-label">Signed in as</span>
+              <div className="topbar-user-name">{currentUserName}</div>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Основний контент сторінки */}
-      <main
-        className="container"
-        // Інлайн-стиль: додаємо відступ зверху (paddingTop: 18px),
-        // щоб контент не "лип" до topbar або мав потрібний візуальний інтервал.
-        style={{ paddingTop: 18 }}
-      >
-        {/* Outlet — місце, де react-router відрендерить компонент поточного дочірнього маршруту.
-            Наприклад:
-            - якщо маршрут "/", тут буде головна сторінка
-            - якщо маршрут "/projects", тут буде сторінка Projects */}
+      <main className="container">
         <Outlet />
       </main>
     </div>

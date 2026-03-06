@@ -1,270 +1,246 @@
-// Імпортуємо React-хуки:
-// - useState: локальний стан для "який проєкт редагуємо" та "який проєкт хочемо видалити"
-// - useMemo: мемоізуємо API-клієнт, щоб не створювати його на кожен ререндер
-import { useMemo, useState } from "react";
-
-// Імпортуємо хуки з @tanstack/react-query:
-// - useQuery: для завантаження списку проєктів (кеш, стани loading/error, тощо)
-// - useMutation: для create/update/delete операцій
-// - useQueryClient: доступ до queryClient для інвалідації кешу після мутацій
+﻿import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-// LocalStorageClient — реалізація StorageClient, яка працює з localStorage.
-// Використовується як "тимчасовий бекенд" (псевдо API) для CRUD.
-import { LocalStorageClient } from "@shared/api/localStorageClient";
-
-// UI-компонент кнопки.
-import { Button } from "@shared/ui/Button";
-
-// Імпортуємо API та типи з сутності project:
-// - ProjectsApi: клас з методами list/create/update/remove
-// - Project: повна модель
-// - ProjectCreateInput: дані, які передаємо при create/update (name, description)
-import { ProjectsApi, type Project, type ProjectCreateInput } from "@entities/project";
-
-// ProjectForm — форма створення/редагування проєкту.
+import { useNavigate } from "react-router";
+import { ActiveProjectApi, PinnedProjectsApi, ProjectsApi } from "@entities/project";
 import { ProjectForm } from "@features/project-form";
+import { LocalStorageClient } from "@shared/api/localStorageClient";
+import { qk } from "@shared/lib/queryKeys";
+import { Button } from "@shared/ui/Button";
+import { Input } from "@shared/ui/Input";
+import { ModalDialog } from "@shared/ui/ModalDialog";
 
-// ConfirmDialog — діалог підтвердження (тут використовується для видалення).
-import { ConfirmDialog } from "@shared/ui/ConfirmDialog";
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
-// qk (query keys) — централізовано описуємо ключі запитів react-query.
-// Це важливо, щоб:
-// - уникнути "магічних" рядків по коду,
-// - гарантовано інвалідовувати саме ті запити, які треба.
-const qk = {
-  projects: ["projects"] as const, // as const робить ключ літеральним та стабільно типізованим
-};
-
-// Сторінка керування проєктами: CRUD через localStorage, але з react-query як "state manager" для запитів.
 export function ProjectsPage() {
-  // Отримуємо queryClient для роботи з кешем (invalidateQueries після мутацій).
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const storage = useMemo(() => new LocalStorageClient(), []);
+  const projectsApi = useMemo(() => new ProjectsApi(storage), [storage]);
+  const activeProjectApi = useMemo(() => new ActiveProjectApi(storage), [storage]);
+  const pinnedProjectsApi = useMemo(() => new PinnedProjectsApi(storage), [storage]);
 
-  // Створюємо екземпляр API один раз.
-  // useMemo з [] означає, що ProjectsApi буде створений при першому рендері і далі не зміниться.
-  //
-  // Навіщо це важливо:
-  // - щоб queryFn/mutationFn посилались на стабільний api,
-  // - щоб уникнути створення нового LocalStorageClient/ProjectsApi при кожному ререндері.
-  const api = useMemo(() => new ProjectsApi(new LocalStorageClient()), []);
+  const [searchValue, setSearchValue] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // editing — поточний проєкт, який редагуємо.
-  // null означає режим створення (Create).
-  const [editing, setEditing] = useState<Project | null>(null);
-
-  // projectToDelete — проєкт, який користувач обрав для видалення (відкриває ConfirmDialog).
-  // null означає, що діалог не відкритий / немає кандидата на видалення.
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-
-  // Запит на отримання списку проєктів.
-  // react-query:
-  // - кешує результат по queryKey
-  // - виставляє isLoading/isError/data
   const projectsQuery = useQuery({
     queryKey: qk.projects,
-    queryFn: () => api.list(), // фактичне джерело даних — localStorage через ProjectsApi
+    queryFn: () => projectsApi.list(),
   });
 
-  // Мутація створення проєкту.
+  const activeProjectQuery = useQuery({
+    queryKey: qk.activeProject,
+    queryFn: () => activeProjectApi.get(),
+  });
+
+  const pinnedProjectsQuery = useQuery({
+    queryKey: qk.pinnedProjects,
+    queryFn: () => pinnedProjectsApi.list(),
+  });
+
   const createMutation = useMutation({
-    // mutationFn отримує дані форми і викликає api.create.
-    mutationFn: (data: ProjectCreateInput) => api.create(data),
-
-    // onSuccess: після успішного створення інвалідовуємо список проєктів,
-    // щоб він перезавантажився і показав новий елемент.
-    onSuccess: async () => {
+    mutationFn: (data: { name: string; description: string }) => projectsApi.create(data),
+    onSuccess: async project => {
       await queryClient.invalidateQueries({ queryKey: qk.projects });
+      await activeProjectApi.set(project.id);
+      queryClient.setQueryData(qk.activeProject, project.id);
     },
   });
 
-  // Мутація оновлення проєкту.
-  const updateMutation = useMutation({
-    // Тут payload містить і id, і data (name/description).
-    // Типізуємо параметр прямо в сигнатурі.
-    mutationFn: ({ id, data }: { id: string; data: ProjectCreateInput }) => api.update(id, data),
-
-    // Після успішного оновлення:
-    // - інвалідовуємо список, щоб отримати актуальні дані
-    // - виходимо з режиму редагування (setEditing(null))
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qk.projects });
-      setEditing(null);
+  const togglePinMutation = useMutation({
+    mutationFn: (projectId: string) => pinnedProjectsApi.toggle(projectId),
+    onSuccess: pinnedProjectIds => {
+      queryClient.setQueryData(qk.pinnedProjects, pinnedProjectIds);
     },
   });
 
-  // Мутація видалення проєкту.
-  const deleteMutation = useMutation({
-    // Видаляємо за id.
-    mutationFn: (id: string) => api.remove(id),
+  const projects = projectsQuery.data ?? [];
+  const pinnedProjectIds = pinnedProjectsQuery.data ?? [];
+  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
+  const searchTerm = searchValue.trim().toLowerCase();
 
-    // onSuccess може отримати:
-    // - перший аргумент: результат мутації (тут void, тому _)
-    // - другий аргумент: змінні (variables), тобто id, який передавали в mutate/mutateAsync
-    onSuccess: async (_, id) => {
-      // Оновлюємо список проєктів після видалення.
-      await queryClient.invalidateQueries({ queryKey: qk.projects });
+  const filteredProjects = useMemo(() => {
+    const visibleProjects = searchTerm
+      ? projects.filter(project => project.name.toLowerCase().includes(searchTerm))
+      : projects;
 
-      // Якщо зараз редагували саме той проєкт, який видалили — скидаємо editing.
-      // Інакше залишаємо як було.
-      setEditing(prev => (prev?.id === id ? null : prev));
+    const pinnedProjects = visibleProjects.filter(project => pinnedProjectIdSet.has(project.id));
+    const regularProjects = visibleProjects.filter(project => !pinnedProjectIdSet.has(project.id));
 
-      // Закриваємо діалог підтвердження.
-      setProjectToDelete(null);
-    },
-  });
+    return [...pinnedProjects, ...regularProjects];
+  }, [pinnedProjectIdSet, projects, searchTerm]);
 
-  // Загальний прапорець "зайнятості" — якщо хоч одна мутація зараз виконується,
-  // то блокуємо деякі дії (наприклад, кнопки Edit/Delete), щоб уникнути гонок станів.
-  const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  async function openProject(projectId: string) {
+    await activeProjectApi.set(projectId);
+    queryClient.setQueryData(qk.activeProject, projectId);
+    navigate(`/projects/${projectId}`);
+  }
 
   return (
-    <div className="stack">
-      {/* Заголовок сторінки */}
-      <header className="stack" style={{ gap: 6 }}>
-        <h1 style={{ margin: 0 }}>ManageMe</h1>
-        <div className="muted">Projects CRUD (localStorage as temporary API)</div>
-      </header>
+    <div className="stack" style={{ gap: 18 }}>
+      <header className="card stack projects-header-sticky" style={{ gap: 16 }}>
+        <div className="row page-header-row">
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="eyebrow">Workspace</span>
+            <h1 style={{ margin: 0 }}>Project list</h1>
+            <p className="muted page-lead">
+              Find a project by name, create a new one, open it fast, or pin it to keep it first.
+            </p>
+          </div>
 
-      {/* Двоколонковий лейаут:
-          - зліва форма (create/edit)
-          - справа список проєктів */}
-      <div className="two-col">
-        {/* LEFT: форма (sticky — ймовірно прилипає при скролі) */}
-        <div className="stack sticky">
-          {/* Якщо editing = null => Create-режим, показуємо форму без initial */}
-          {!editing ? (
-            <ProjectForm
-              // onSubmit: при submit викликаємо createMutation
-              onSubmit={async data => {
-                await createMutation.mutateAsync(data);
-              }}
-              // Текст на кнопці може показувати стан виконання
-              submitText={createMutation.isPending ? "Creating..." : "Create"}
-            />
-          ) : (
-            // Якщо editing не null => Edit-режим, передаємо initial та інші пропси
-            <ProjectForm
-              initial={editing}
-              submitText={updateMutation.isPending ? "Saving..." : "Update"}
-              // Кнопка Cancel у формі скидає режим редагування
-              onCancel={() => setEditing(null)}
-              // onSubmit: викликаємо updateMutation з id + data
-              onSubmit={async data => {
-                await updateMutation.mutateAsync({ id: editing.id, data });
-              }}
-            />
-          )}
+          <Button type="button" onClick={() => setIsCreateOpen(true)}>
+            Add new
+          </Button>
         </div>
 
-        {/* RIGHT: список */}
-        <section className="stack" style={{ gap: 12 }}>
-          {/* Заголовок секції списку + лічильник */}
-          <div className="row">
-            <h2 style={{ margin: 0 }}>Project List</h2>
+        <div className="projects-toolbar">
+          <Input
+            value={searchValue}
+            onChange={event => setSearchValue(event.target.value)}
+            placeholder="Search by project name"
+            aria-label="Search projects by name"
+          />
+          <div className="muted projects-toolbar-meta">
+            {projects.length === 1 ? "1 project" : `${projects.length} projects`}
+          </div>
+        </div>
+      </header>
 
-            {/* Лічильник показуємо лише якщо data вже є (щоб не показувати "undefined items") */}
-            <div className="muted" style={{ fontSize: 13 }}>
-              {projectsQuery.data ? `${projectsQuery.data.length} items` : ""}
+      {projectsQuery.isLoading && <div className="card">Loading projects...</div>}
+
+      {projectsQuery.isError && (
+        <div className="card" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading projects</div>
+          <div className="muted">Open the console for details.</div>
+        </div>
+      )}
+
+      {!projectsQuery.isLoading && !projectsQuery.isError && projects.length === 0 && (
+        <div className="empty-state empty-state-centered">
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>No projects yet</div>
+          <div className="muted" style={{ marginBottom: 14 }}>
+            Start by creating your first project.
+          </div>
+          <div>
+            <Button type="button" onClick={() => setIsCreateOpen(true)}>
+              Add new
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!projectsQuery.isLoading &&
+        !projectsQuery.isError &&
+        projects.length > 0 &&
+        filteredProjects.length === 0 && (
+          <div className="empty-state empty-state-centered">
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
+            <div className="muted" style={{ marginBottom: 14 }}>
+              No project matches "{searchValue}".
+            </div>
+            <div>
+              <Button type="button" onClick={() => setSearchValue("")}>
+                Clear search
+              </Button>
             </div>
           </div>
+        )}
 
-          {/* Стан завантаження */}
-          {projectsQuery.isLoading && <div className="card">Loading...</div>}
+      {filteredProjects.length > 0 && (
+        <section className="project-grid">
+          {filteredProjects.map(project => {
+            const isSelected = project.id === activeProjectQuery.data;
+            const isPinned = pinnedProjectIdSet.has(project.id);
 
-          {/* Стан помилки */}
-          {projectsQuery.isError && (
-            <div className="card" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading projects</div>
-              <div className="muted">Open console for details.</div>
-            </div>
-          )}
-
-          {/* Стан "порожньо" — коли data є, але масив пустий */}
-          {projectsQuery.data?.length === 0 && <div className="card">No projects yet.</div>}
-
-          {/* Рендер списку проєктів */}
-          <div className="stack" style={{ gap: 12 }}>
-            {projectsQuery.data?.map(p => (
-              // article — семантично: окремий елемент списку/контенту
-              <article key={p.id} className="card card-sm stack" style={{ gap: 10 }}>
-                <div className="row">
-                  {/* Назва проєкту */}
-                  <div style={{ fontWeight: 800 }}>{p.name}</div>
-
-                  {/* Кнопки дій */}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {/* Edit:
-                        - ставимо editing в поточний проєкт
-                        - disabled при isBusy, щоб не накладати операції */}
-                    <Button type="button" onClick={() => setEditing(p)} disabled={isBusy}>
-                      Edit
-                    </Button>
-
-                    {/* Delete:
-                        - відкриваємо ConfirmDialog, встановлюючи projectToDelete
-                        - disabled при isBusy */}
-                    <Button
-                      type="button"
-                      variant="danger"
-                      disabled={isBusy}
-                      onClick={() => setProjectToDelete(p)}
-                    >
-                      Delete
-                    </Button>
+            return (
+              <article
+                key={project.id}
+                className={`project-tile ${isSelected ? "project-tile-selected" : ""}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => void openProject(project.id)}
+                onKeyDown={event => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    void openProject(project.id);
+                  }
+                }}
+              >
+                <div className="project-tile-head">
+                  <div className="project-tile-title-wrap">
+                    <div className="project-tile-title">{project.name}</div>
+                    <div className="badge-row">
+                      {isSelected && <span className="pill pill-active">Selected</span>}
+                    </div>
                   </div>
+
+                  <Button
+                    type="button"
+                    className={`pin-toggle ${isPinned ? "pin-toggle-active" : ""}`}
+                    aria-label={isPinned ? "Unpin project" : "Pin project"}
+                    aria-pressed={isPinned}
+                    disabled={togglePinMutation.isPending}
+                    onClick={event => {
+                      event.stopPropagation();
+                      void togglePinMutation.mutateAsync(project.id);
+                    }}
+                    onKeyDown={event => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="pin-toggle-icon" aria-hidden="true">
+                      <path
+                        d="M9 3h6l-1 5 3 3v1h-4v8l-1-1-1 1v-8H7v-1l3-3-1-5Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </Button>
                 </div>
 
-                {/* Опис: якщо є текст — показуємо його з pre-wrap (зберігаємо переноси рядків),
-                    якщо порожній — показуємо "No description" */}
-                {p.description ? (
-                  <div style={{ whiteSpace: "pre-wrap" }}>{p.description}</div>
-                ) : (
-                  <div className="muted">No description</div>
-                )}
+                <div className="project-tile-description">
+                  {project.description || "No description yet."}
+                </div>
 
-                {/* Технічна інформація: id проєкту (може бути корисно для дебагу) */}
-                <div className="muted" style={{ fontSize: 12 }}>
-                  id: {p.id}
+                <div className="project-meta">
+                  <span>Created {dateFormatter.format(project.createdAt)}</span>
+                  <span>Updated {dateFormatter.format(project.updatedAt)}</span>
                 </div>
               </article>
-            ))}
-          </div>
+            );
+          })}
         </section>
-      </div>
+      )}
 
-      {/* Діалог підтвердження видалення */}
-      <ConfirmDialog
-        // open: true, якщо projectToDelete не null
-        open={Boolean(projectToDelete)}
-        // Заголовок: якщо є обраний проєкт — підставляємо його назву в текст
-        title={projectToDelete ? `Delete "${projectToDelete.name}"?` : "Delete project?"}
-        // Опис дії (попередження про незворотність)
-        description="This action cannot be undone."
-        // Тексти кнопок
-        confirmText="Delete"
-        cancelText="Cancel"
-        // danger: вказує діалогу, що дія небезпечна (може впливати на стилі)
-        danger
-        // loading: під час виконання видалення показуємо стан завантаження в діалозі
-        loading={deleteMutation.isPending}
-        // onConfirm: викликається при підтвердженні
-        onConfirm={async () => {
-          // Захист: якщо чомусь projectToDelete вже null — нічого не робимо
-          if (!projectToDelete) return;
+      <ModalDialog
+        open={isCreateOpen}
+        onClose={() => {
+          if (createMutation.isPending) {
+            return;
+          }
 
-          // Запускаємо мутацію видалення по id
-          await deleteMutation.mutateAsync(projectToDelete.id);
+          setIsCreateOpen(false);
         }}
-        // onCancel: закриття діалогу
-        onCancel={() => {
-          // Якщо видалення вже триває — не даємо закривати (щоб не ламати UX/стан)
-          if (deleteMutation.isPending) return;
+        ariaLabel="Create project"
+      >
+        <ProjectForm
+          surface="plain"
+          submitText={createMutation.isPending ? "Creating..." : "Create project"}
+          onCancel={() => {
+            if (createMutation.isPending) {
+              return;
+            }
 
-          // Інакше — просто скидаємо projectToDelete, тим самим закриваючи діалог
-          setProjectToDelete(null);
-        }}
-      />
+            setIsCreateOpen(false);
+          }}
+          onSubmit={async data => {
+            const project = await createMutation.mutateAsync(data);
+            setIsCreateOpen(false);
+            navigate(`/projects/${project.id}`);
+          }}
+        />
+      </ModalDialog>
     </div>
   );
 }
