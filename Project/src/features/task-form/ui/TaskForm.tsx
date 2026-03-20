@@ -1,47 +1,57 @@
-import { useState, type FormEvent } from "react";
-import type { Story, StoryFormValues } from "@entities/story";
-import { validateStoryInput } from "@entities/story";
+import { useMemo, useState, type FormEvent } from "react";
+import type { Story } from "@entities/story";
+import {
+  type Task,
+  type TaskCreateInput,
+  validateTaskInput,
+} from "@entities/task";
 import { Button } from "@shared/ui/Button";
 import { Input } from "@shared/ui/Input";
 import { Select } from "@shared/ui/Select";
 import { Textarea } from "@shared/ui/Textarea";
 
 type Props = {
-  initial?: Story | null;
-  onSubmit: (data: StoryFormValues) => Promise<void> | void;
+  initial?: Task | null;
+  stories: Story[];
+  onSubmit: (data: TaskCreateInput) => Promise<void> | void;
   onCancel?: () => void;
   submitText?: string;
   surface?: "card" | "plain";
 };
 
-export function StoryForm({
+export function TaskForm({
   initial = null,
+  stories,
   onSubmit,
   onCancel,
   submitText,
   surface = "card",
 }: Props) {
+  const defaultStoryId = initial?.storyId ?? stories[0]?.id ?? "";
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [priority, setPriority] = useState<StoryFormValues["priority"]>(
-    initial?.priority ?? "medium"
-  );
-  const [status, setStatus] = useState<StoryFormValues["status"]>(
-    initial?.status ?? "todo"
+  const [priority, setPriority] = useState(initial?.priority ?? "medium");
+  const [storyId, setStoryId] = useState(defaultStoryId);
+  const [estimatedHours, setEstimatedHours] = useState(
+    initial ? String(initial.estimatedHours) : ""
   );
   const [error, setError] = useState<string | null>(null);
 
   const formClassName = surface === "card" ? "card stack" : "stack project-form-plain";
+  const title = useMemo(() => (initial ? "Edit task" : "Create task"), [initial]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    const result = validateStoryInput({
+    const result = validateTaskInput({
       name,
       description,
       priority,
-      status: initial?.status ?? status,
+      storyId,
+      estimatedHours,
+      status: initial?.status ?? "todo",
+      assigneeId: initial?.assigneeId ?? "",
     });
 
     if (!result.ok) {
@@ -55,20 +65,19 @@ export function StoryForm({
       setName("");
       setDescription("");
       setPriority("medium");
-      setStatus("todo");
+      setStoryId(stories[0]?.id ?? "");
+      setEstimatedHours("");
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className={formClassName} style={{ gap: 12 }}>
       <div className="stack" style={{ gap: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 20 }}>
-          {initial ? "Edit history item" : "Create history item"}
-        </div>
+        <div style={{ fontWeight: 800, fontSize: 20 }}>{title}</div>
         <div className="muted" style={{ fontSize: 13 }}>
           {initial
-            ? "Update the history item details and save your changes."
-            : "Add a new history item to the current project."}
+            ? "Update the task details and save your changes. Status and assignee stay managed in task details."
+            : "Add a task to one of the project history items. New tasks always start as To do."}
         </div>
       </div>
 
@@ -77,7 +86,7 @@ export function StoryForm({
         <Input
           value={name}
           onChange={event => setName(event.target.value)}
-          placeholder="E.g. Improve onboarding"
+          placeholder="E.g. Configure CI pipeline"
           autoFocus
         />
       </label>
@@ -88,43 +97,51 @@ export function StoryForm({
           value={description}
           onChange={event => setDescription(event.target.value)}
           rows={5}
-          placeholder="Describe the expected outcome..."
+          placeholder="Describe the expected task output..."
         />
       </label>
+
+      <div className="form-grid">
+        <label className="stack" style={{ gap: 6 }}>
+          <div style={{ fontWeight: 700 }}>Story</div>
+          <Select
+            value={storyId}
+            onChange={event => setStoryId(event.target.value)}
+            disabled={stories.length === 0}
+          >
+            {stories.length === 0 && <option value="">No stories available</option>}
+            {stories.map(story => (
+              <option key={story.id} value={story.id}>
+                {story.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        <label className="stack" style={{ gap: 6 }}>
+          <div style={{ fontWeight: 700 }}>Estimated time (hours)</div>
+          <Input
+            type="number"
+            min="0.25"
+            step="0.25"
+            value={estimatedHours}
+            onChange={event => setEstimatedHours(event.target.value)}
+            placeholder="E.g. 6"
+          />
+        </label>
+      </div>
 
       <div className="form-grid">
         <label className="stack" style={{ gap: 6 }}>
           <div style={{ fontWeight: 700 }}>Priority</div>
           <Select
             value={priority}
-            onChange={event =>
-              setPriority(event.target.value as StoryFormValues["priority"])
-            }
+            onChange={event => setPriority(event.target.value as typeof priority)}
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
           </Select>
-        </label>
-
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Status</div>
-          <Select
-            value={status}
-            disabled={Boolean(initial)}
-            onChange={event =>
-              setStatus(event.target.value as StoryFormValues["status"])
-            }
-          >
-            <option value="todo">To do</option>
-            <option value="doing">In progress</option>
-            <option value="done">Done</option>
-          </Select>
-          {initial && (
-            <div className="muted" style={{ fontSize: 12 }}>
-              Status is managed automatically by task progress.
-            </div>
-          )}
         </label>
       </div>
 
@@ -149,25 +166,7 @@ export function StoryForm({
             Cancel
           </Button>
         )}
-
-        {!initial && !onCancel && (
-          <Button
-            type="button"
-            onClick={() => {
-              setName("");
-              setDescription("");
-              setPriority("medium");
-              setStatus("todo");
-              setError(null);
-            }}
-          >
-            Clear
-          </Button>
-        )}
-
-        <Button type="submit">
-          {submitText ?? (initial ? "Save" : "Create")}
-        </Button>
+        <Button type="submit">{submitText ?? (initial ? "Save" : "Create")}</Button>
       </div>
     </form>
   );

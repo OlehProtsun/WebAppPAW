@@ -30,11 +30,6 @@ export function ProjectsPage() {
     queryFn: () => projectsApi.list(),
   });
 
-  const activeProjectQuery = useQuery({
-    queryKey: qk.activeProject,
-    queryFn: () => activeProjectApi.get(),
-  });
-
   const pinnedProjectsQuery = useQuery({
     queryKey: qk.pinnedProjects,
     queryFn: () => pinnedProjectsApi.list(),
@@ -56,9 +51,11 @@ export function ProjectsPage() {
     },
   });
 
-  const projects = projectsQuery.data ?? [];
-  const pinnedProjectIds = pinnedProjectsQuery.data ?? [];
-  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
+  const pinnedProjectIdSet = useMemo(
+    () => new Set(pinnedProjectsQuery.data ?? []),
+    [pinnedProjectsQuery.data]
+  );
   const searchTerm = searchValue.trim().toLowerCase();
 
   const filteredProjects = useMemo(() => {
@@ -151,13 +148,12 @@ export function ProjectsPage() {
       {filteredProjects.length > 0 && (
         <section className="project-grid">
           {filteredProjects.map(project => {
-            const isSelected = project.id === activeProjectQuery.data;
             const isPinned = pinnedProjectIdSet.has(project.id);
 
             return (
               <article
                 key={project.id}
-                className={`project-tile ${isSelected ? "project-tile-selected" : ""}`}
+                className="project-tile"
                 role="button"
                 tabIndex={0}
                 onClick={() => void openProject(project.id)}
@@ -171,9 +167,6 @@ export function ProjectsPage() {
                 <div className="project-tile-head">
                   <div className="project-tile-title-wrap">
                     <div className="project-tile-title">{project.name}</div>
-                    <div className="badge-row">
-                      {isSelected && <span className="pill pill-active">Selected</span>}
-                    </div>
                   </div>
 
                   <Button
@@ -225,6 +218,7 @@ export function ProjectsPage() {
         ariaLabel="Create project"
       >
         <ProjectForm
+          key="create-project"
           surface="plain"
           submitText={createMutation.isPending ? "Creating..." : "Create project"}
           onCancel={() => {

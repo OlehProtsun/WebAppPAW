@@ -1,7 +1,7 @@
 // Імпортуємо тип TextareaHTMLAttributes з React.
 // Це набір стандартних HTML-атрибутів для <textarea> з правильною типізацією:
 // value, onChange, rows, placeholder, disabled, aria-*, і т.д.
-import { TextareaHTMLAttributes } from "react";
+import type { TextareaHTMLAttributes } from "react";
 
 // Компонент Textarea — легка обгортка над стандартним <textarea>,
 // яка додає базовий CSS-клас "textarea" і дозволяє додавати додаткові класи через className.

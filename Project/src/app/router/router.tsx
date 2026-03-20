@@ -1,7 +1,9 @@
-﻿import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { AppLayout } from "@app/layouts/AppLayout";
 import { ProjectProfilePage } from "@pages/project-profile";
 import { ProjectsPage } from "@pages/projects";
+import { StoryProfilePage } from "@pages/story-profile";
+import { TaskDetailsPage } from "@pages/task-details";
 
 const routeErrorElement = (
   <div className="card">
@@ -20,6 +22,8 @@ export const router = createBrowserRouter(
         { index: true, element: <Navigate to="/projects" replace /> },
         { path: "projects", element: <ProjectsPage /> },
         { path: "projects/:projectId", element: <ProjectProfilePage /> },
+        { path: "projects/:projectId/stories/:storyId", element: <StoryProfilePage /> },
+        { path: "projects/:projectId/tasks/:taskId", element: <TaskDetailsPage /> },
         { path: "*", element: <Navigate to="/projects" replace /> },
       ],
     },
