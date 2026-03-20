@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type { Project, ProjectCreateInput } from "@entities/project";
 import { validateProjectInput } from "@entities/project";
 import { Button } from "@shared/ui/Button";
@@ -23,12 +23,6 @@ export function ProjectForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setName(initial?.name ?? "");
-    setDescription(initial?.description ?? "");
-    setError(null);
-  }, [initial?.id]);
 
   const title = useMemo(() => (initial ? "Edit project" : "Create project"), [initial]);
   const formClassName = surface === "card" ? "card stack" : "stack project-form-plain";

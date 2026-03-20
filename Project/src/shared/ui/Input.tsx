@@ -1,7 +1,7 @@
 // Імпортуємо тип InputHTMLAttributes з React.
 // Це набір стандартних HTML-атрибутів для <input> з правильною типізацією:
 // value, onChange, placeholder, type, disabled, aria-*, і т.д.
-import { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes } from "react";
 
 // Компонент Input — легка обгортка над стандартним <input>,
 // яка додає базовий CSS-клас "input" і дозволяє дописувати додаткові класи через className.

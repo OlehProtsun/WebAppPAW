@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // - PropsWithChildren: допоміжний тип, який додає проп children до пропсів компонента.
 // - useState: тут використовується для одноразового створення екземпляра QueryClient і збереження його
 //   між ререндерами компонента.
-import { PropsWithChildren, useState } from "react";
+import { useState, type PropsWithChildren } from "react";
 
 // Компонент-обгортка (Provider) для react-query.
 // Його задача: створити один QueryClient та прокинути його через QueryClientProvider до всіх дочірніх компонентів.

@@ -1,112 +1,134 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router";
-import { ActiveProjectApi, ProjectsApi } from "@entities/project";
-import { CurrentUserManager } from "@entities/user";
+import { CurrentUserManager, UsersApi } from "@entities/user";
 import { LocalStorageClient } from "@shared/api/localStorageClient";
 import { qk } from "@shared/lib/queryKeys";
-import { Button } from "@shared/ui/Button";
-import { Select } from "@shared/ui/Select";
+
+function formatRoleLabel(role: string) {
+  if (role === "developer") {
+    return "devel.";
+  }
+
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function getInitials(firstName?: string, lastName?: string) {
+  return `${firstName?.charAt(0) ?? ""}${lastName?.charAt(0) ?? ""}` || "--";
+}
+
+function shortenLabel(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  if (maxLength <= 3) {
+    return value.slice(0, maxLength);
+  }
+
+  return `${value.slice(0, maxLength - 3)}...`;
+}
 
 export function AppLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const storage = useMemo(() => new LocalStorageClient(), []);
-  const projectsApi = useMemo(() => new ProjectsApi(storage), [storage]);
-  const activeProjectApi = useMemo(() => new ActiveProjectApi(storage), [storage]);
-  const currentUserManager = useMemo(() => new CurrentUserManager(), []);
+  const currentUserManager = useMemo(() => new CurrentUserManager(storage), [storage]);
+  const usersApi = useMemo(() => new UsersApi(), []);
 
   const currentUserQuery = useQuery({
     queryKey: qk.currentUser,
     queryFn: () => currentUserManager.getCurrentUser(),
   });
 
-  const projectsQuery = useQuery({
-    queryKey: qk.projects,
-    queryFn: () => projectsApi.list(),
+  const usersQuery = useQuery({
+    queryKey: qk.users,
+    queryFn: () => usersApi.list(),
   });
 
-  const activeProjectQuery = useQuery({
-    queryKey: qk.activeProject,
-    queryFn: () => activeProjectApi.get(),
-  });
-
-  const selectProjectMutation = useMutation({
-    mutationFn: (projectId: string | null) => activeProjectApi.set(projectId),
-    onSuccess: async projectId => {
-      queryClient.setQueryData(qk.activeProject, projectId);
-      await queryClient.invalidateQueries({ queryKey: qk.activeProject });
+  const selectUserMutation = useMutation({
+    mutationFn: (userId: string) => currentUserManager.setCurrentUser(userId),
+    onSuccess: async user => {
+      queryClient.setQueryData(qk.currentUser, user);
+      await queryClient.invalidateQueries({ queryKey: qk.currentUser });
     },
   });
 
   const currentUserName = currentUserQuery.data
     ? `${currentUserQuery.data.firstName} ${currentUserQuery.data.lastName}`
     : "Loading...";
-  const projectOptions = projectsQuery.data ?? [];
-  const activeProjectId = activeProjectQuery.data ?? null;
-  const projectPlaceholder = projectsQuery.isLoading
-    ? "Loading projects..."
-    : projectOptions.length > 0
-      ? "Choose a project"
-      : "No projects available";
+  const currentUserShortName = currentUserQuery.data?.firstName ?? "Loading";
+  const currentUserRole = currentUserQuery.data
+    ? formatRoleLabel(currentUserQuery.data.role)
+    : "Loading...";
+  const currentUserInitials = getInitials(
+    currentUserQuery.data?.firstName,
+    currentUserQuery.data?.lastName
+  );
+  const userOptions = usersQuery.data ?? [];
 
   return (
-    <div>
-      <header className="topbar">
-        <div className="topbar-shell">
-          <div className="topbar-meta">
-            <div className="topbar-project-group">
-              <label className="topbar-project">
-                <span className="topbar-label">Selected project</span>
-                <Select
-                  className="topbar-select"
-                  value={activeProjectId ?? ""}
-                  disabled={
-                    projectsQuery.isLoading ||
-                    selectProjectMutation.isPending ||
-                    projectOptions.length === 0
-                  }
-                  onChange={event => {
-                    const value = event.target.value;
-                    selectProjectMutation.mutate(value || null);
-                    navigate(value ? `/projects/${value}` : "/projects");
-                  }}
-                >
-                  <option value="">{projectPlaceholder}</option>
-                  {projectOptions.map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div className="app-sidebar-inner">
+          <div className="sidebar-nav">
+            <span className="sidebar-plain-label">Pages</span>
 
-              <Button
-                type="button"
-                className="topbar-open-btn"
-                onClick={() => {
-                  if (!activeProjectId) {
-                    return;
-                  }
+            <button
+              type="button"
+              className="sidebar-page-tile"
+              onClick={() => navigate("/projects")}
+              aria-label="Open projects list"
+            >
+              PJ
+            </button>
 
-                  navigate(`/projects/${activeProjectId}`);
-                }}
-                disabled={!activeProjectId}
-              >
-                Open
-              </Button>
+            <span className="sidebar-link-label">Projects</span>
+          </div>
+
+          <div className="sidebar-user-card">
+            <div className="sidebar-role-pill" title={currentUserRole}>
+              {shortenLabel(currentUserRole, 10)}
             </div>
 
-            <div className="topbar-user">
-              <span className="topbar-label">Signed in as</span>
-              <div className="topbar-user-name">{currentUserName}</div>
+            <div className="sidebar-user-avatar" title={currentUserName}>
+              {currentUserInitials}
             </div>
+
+            <div className="sidebar-user-name" title={currentUserName}>
+              {shortenLabel(currentUserShortName, 10)}
+            </div>
+
+            <select
+              className="sidebar-user-select-overlay"
+              value={currentUserQuery.data?.id ?? ""}
+              disabled={usersQuery.isLoading || selectUserMutation.isPending}
+              onChange={event => {
+                const value = event.target.value;
+
+                if (!value) {
+                  return;
+                }
+
+                selectUserMutation.mutate(value);
+              }}
+              aria-label="Switch signed in user"
+              title="Switch signed in user"
+            >
+              {userOptions.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.firstName} {user.lastName} ({user.role})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="container">
-        <Outlet />
+      <main className="app-content">
+        <div className="container">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

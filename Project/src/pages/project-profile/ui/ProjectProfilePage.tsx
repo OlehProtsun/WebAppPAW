@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import {
@@ -8,7 +8,8 @@ import {
   type ProjectCreateInput,
 } from "@entities/project";
 import { StoriesApi, type Story, type StoryFormValues } from "@entities/story";
-import { CurrentUserManager } from "@entities/user";
+import { TasksApi } from "@entities/task";
+import { CurrentUserManager, UsersApi } from "@entities/user";
 import { ProjectForm } from "@features/project-form";
 import { StoryForm } from "@features/story-form";
 import { LocalStorageClient } from "@shared/api/localStorageClient";
@@ -30,10 +31,24 @@ const badgeClassByStatus = {
   done: "story-badge story-badge-done",
 } as const;
 
+const statusLabel = {
+  todo: "To do",
+  doing: "In progress",
+  done: "Done",
+} as const;
+
 const dateFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+
+function formatUserName(firstName?: string, lastName?: string) {
+  if (!firstName || !lastName) {
+    return "Unknown user";
+  }
+
+  return `${firstName} ${lastName}`;
+}
 
 export function ProjectProfilePage() {
   const { projectId = "" } = useParams();
@@ -44,7 +59,9 @@ export function ProjectProfilePage() {
   const activeProjectApi = useMemo(() => new ActiveProjectApi(storage), [storage]);
   const pinnedProjectsApi = useMemo(() => new PinnedProjectsApi(storage), [storage]);
   const storiesApi = useMemo(() => new StoriesApi(storage), [storage]);
+  const tasksApi = useMemo(() => new TasksApi(storage), [storage]);
   const currentUserManager = useMemo(() => new CurrentUserManager(), []);
+  const usersApi = useMemo(() => new UsersApi(), []);
 
   const [searchValue, setSearchValue] = useState("");
   const [editingStory, setEditingStory] = useState<Story | null>(null);
@@ -56,6 +73,11 @@ export function ProjectProfilePage() {
   const currentUserQuery = useQuery({
     queryKey: qk.currentUser,
     queryFn: () => currentUserManager.getCurrentUser(),
+  });
+
+  const usersQuery = useQuery({
+    queryKey: qk.users,
+    queryFn: () => usersApi.list(),
   });
 
   const projectsQuery = useQuery({
@@ -74,12 +96,14 @@ export function ProjectProfilePage() {
   );
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setSearchValue("");
     setEditingStory(null);
     setStoryToDelete(null);
     setIsCreateStoryOpen(false);
     setIsProjectDialogOpen(false);
     setIsDeleteProjectOpen(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [project?.id]);
 
   useEffect(() => {
@@ -105,6 +129,12 @@ export function ProjectProfilePage() {
   const storiesQuery = useQuery({
     queryKey: project ? qk.stories(project.id) : qk.storyList,
     queryFn: () => storiesApi.listByProject(project!.id),
+    enabled: Boolean(project),
+  });
+
+  const tasksQuery = useQuery({
+    queryKey: project ? qk.tasks(project.id) : qk.taskList,
+    queryFn: () => tasksApi.listByProject(project!.id),
     enabled: Boolean(project),
   });
 
@@ -151,10 +181,14 @@ export function ProjectProfilePage() {
   });
 
   const deleteStoryMutation = useMutation({
-    mutationFn: (id: string) => storiesApi.remove(id),
+    mutationFn: async (story: Story) => {
+      await tasksApi.removeByStory(story.id);
+      await storiesApi.remove(story.id);
+    },
     onSuccess: async () => {
       if (project) {
         await queryClient.invalidateQueries({ queryKey: qk.stories(project.id) });
+        await queryClient.invalidateQueries({ queryKey: qk.tasks(project.id) });
       }
 
       setStoryToDelete(null);
@@ -176,11 +210,13 @@ export function ProjectProfilePage() {
         throw new Error("Project not found");
       }
 
-      await projectsApi.remove(project.id);
+      await tasksApi.removeByProject(project.id);
       await storiesApi.removeByProject(project.id);
+      await projectsApi.remove(project.id);
       const pinnedProjectIds = await pinnedProjectsApi.remove(project.id);
 
       const activeProjectId = await activeProjectApi.get();
+
       if (activeProjectId === project.id) {
         await activeProjectApi.set(null);
       }
@@ -192,9 +228,11 @@ export function ProjectProfilePage() {
       await queryClient.invalidateQueries({ queryKey: qk.projects });
       await queryClient.invalidateQueries({ queryKey: qk.activeProject });
       await queryClient.invalidateQueries({ queryKey: qk.storyList });
+      await queryClient.invalidateQueries({ queryKey: qk.taskList });
 
       if (project) {
         await queryClient.invalidateQueries({ queryKey: qk.stories(project.id) });
+        await queryClient.invalidateQueries({ queryKey: qk.tasks(project.id) });
       }
 
       setIsDeleteProjectOpen(false);
@@ -202,7 +240,20 @@ export function ProjectProfilePage() {
     },
   });
 
-  const stories = storiesQuery.data ?? [];
+  const stories = useMemo(() => storiesQuery.data ?? [], [storiesQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
+  const usersById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
+  const taskCountByStoryId = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    tasks.forEach(task => {
+      counts.set(task.storyId, (counts.get(task.storyId) ?? 0) + 1);
+    });
+
+    return counts;
+  }, [tasks]);
+
   const searchTerm = searchValue.trim().toLowerCase();
   const filteredStories = useMemo(() => {
     if (!searchTerm) {
@@ -218,9 +269,7 @@ export function ProjectProfilePage() {
       );
     });
   }, [searchTerm, stories]);
-  const currentUserName = currentUserQuery.data
-    ? `${currentUserQuery.data.firstName} ${currentUserQuery.data.lastName}`
-    : "Loading...";
+
   const historyCountLabel = searchTerm
     ? `${filteredStories.length} of ${stories.length} items`
     : filteredStories.length === 1
@@ -234,20 +283,20 @@ export function ProjectProfilePage() {
     updateProjectMutation.isPending ||
     deleteProjectMutation.isPending;
 
-  const sections = [
-    {
-      key: "doing",
-      title: "Currently in progress",
-      description: "History items that are actively moving forward.",
-      emptyText: "Nothing is in progress yet.",
-      items: filteredStories.filter(story => story.status === "doing"),
-    },
+  const storySections = [
     {
       key: "todo",
       title: "Waiting / To do",
       description: "History items queued for the next steps.",
       emptyText: "No planned history items yet.",
       items: filteredStories.filter(story => story.status === "todo"),
+    },
+    {
+      key: "doing",
+      title: "Currently in progress",
+      description: "History items that are actively moving forward.",
+      emptyText: "Nothing is in progress yet.",
+      items: filteredStories.filter(story => story.status === "doing"),
     },
     {
       key: "done",
@@ -257,6 +306,15 @@ export function ProjectProfilePage() {
       items: filteredStories.filter(story => story.status === "done"),
     },
   ] as const;
+
+  function getUserName(userId: string | null) {
+    if (!userId) {
+      return "Unassigned";
+    }
+
+    const user = usersById.get(userId);
+    return user ? formatUserName(user.firstName, user.lastName) : "Unknown user";
+  }
 
   function openCreateStoryDialog() {
     setEditingStory(null);
@@ -298,7 +356,7 @@ export function ProjectProfilePage() {
   return (
     <div className="stack" style={{ gap: 18 }}>
       <section className="profile-top-grid">
-        <header className="card stack project-profile-card" style={{ gap: 18 }}>
+        <header className="card stack project-profile-card story-profile-hero" style={{ gap: 18 }}>
           <div className="row page-header-row">
             <Button type="button" onClick={() => navigate("/projects")}>
               Back
@@ -337,171 +395,208 @@ export function ProjectProfilePage() {
               <div className="stat-value">{stories.length}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">In progress</div>
-              <div className="stat-value">
-                {stories.filter(story => story.status === "doing").length}
-              </div>
+              <div className="stat-label">Tasks</div>
+              <div className="stat-value">{tasks.length}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Owner</div>
-              <div className="stat-value stat-value-sm">{currentUserName}</div>
+              <div className="stat-label">In progress tasks</div>
+              <div className="stat-value">
+                {tasks.filter(task => task.status === "doing").length}
+              </div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Updated</div>
-              <div className="stat-value stat-value-sm">{dateFormatter.format(project.updatedAt)}</div>
+              <div className="stat-value stat-value-sm">
+                {dateFormatter.format(project.updatedAt)}
+              </div>
             </div>
           </div>
         </header>
-
-        <section className="card stack project-history-card" style={{ gap: 16 }}>
-          <div className="row page-header-row">
-            <div className="stack" style={{ gap: 6 }}>
-              <span className="eyebrow">History</span>
-              <h2 style={{ margin: 0 }}>Project history</h2>
-              <p className="muted page-lead">
-                Search, add, and manage the history items inside this project.
-              </p>
-            </div>
-
-            <Button
-              type="button"
-              className="history-add-btn"
-              onClick={openCreateStoryDialog}
-              disabled={isBusy || currentUserQuery.isLoading}
-            >
-              Add new
-            </Button>
-          </div>
-
-          <div className="projects-toolbar">
-            <Input
-              value={searchValue}
-              onChange={event => setSearchValue(event.target.value)}
-              placeholder="Search history"
-              aria-label="Search project history"
-            />
-            <div className="muted projects-toolbar-meta">{historyCountLabel}</div>
-          </div>
-        </section>
       </section>
 
-      <section className="story-section-grid">
-        {storiesQuery.isLoading && <div className="card story-section-span">Loading history...</div>}
-
-        {storiesQuery.isError && (
-          <div className="card story-section-span" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading history</div>
-            <div className="muted">Open the console for details.</div>
+      <section className="card stack" style={{ gap: 16 }}>
+        <div className="row page-header-row">
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="eyebrow">Kanban</span>
+            <h2 style={{ margin: 0 }}>History board</h2>
+            <p className="muted page-lead">
+              Follow the project history by status, search items quickly, and open each
+              story profile when you need task details.
+            </p>
           </div>
-        )}
 
-        {!storiesQuery.isLoading && !storiesQuery.isError && stories.length === 0 && (
-          <div className="empty-state empty-state-centered story-section-span">
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>No history yet</div>
-            <div className="muted" style={{ marginBottom: 14 }}>
-              Add the first history item for this project.
-            </div>
-            <div>
-              <Button
-              type="button"
-              className="history-add-btn"
-              onClick={openCreateStoryDialog}
-              disabled={isBusy || currentUserQuery.isLoading}
-            >
-                Add new
-              </Button>
-            </div>
-          </div>
-        )}
+          <Button
+            type="button"
+            className="history-add-btn"
+            onClick={openCreateStoryDialog}
+            disabled={isBusy || currentUserQuery.isLoading}
+          >
+            Add story
+          </Button>
+        </div>
 
-        {!storiesQuery.isLoading && !storiesQuery.isError &&
-          stories.length > 0 &&
-          filteredStories.length === 0 && (
+        <div className="projects-toolbar">
+          <Input
+            value={searchValue}
+            onChange={event => setSearchValue(event.target.value)}
+            placeholder="Search history"
+            aria-label="Search project history"
+          />
+          <div className="muted projects-toolbar-meta">{historyCountLabel}</div>
+        </div>
+
+        <div className="story-section-grid">
+          {storiesQuery.isLoading && <div className="card story-section-span">Loading history...</div>}
+
+          {storiesQuery.isError && (
+            <div className="card story-section-span" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading history</div>
+              <div className="muted">Open the console for details.</div>
+            </div>
+          )}
+
+          {!storiesQuery.isLoading && !storiesQuery.isError && stories.length === 0 && (
             <div className="empty-state empty-state-centered story-section-span">
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>No history yet</div>
               <div className="muted" style={{ marginBottom: 14 }}>
-                No history item matches "{searchValue}".
+                Add the first history item for this project.
               </div>
               <div>
-                <Button type="button" onClick={() => setSearchValue("")}>
-                  Clear search
+                <Button
+                  type="button"
+                  className="history-add-btn"
+                  onClick={openCreateStoryDialog}
+                  disabled={isBusy || currentUserQuery.isLoading}
+                >
+                  Add story
                 </Button>
               </div>
             </div>
           )}
 
-        {!storiesQuery.isLoading && !storiesQuery.isError && filteredStories.length > 0 &&
-          sections.map(section => (
-            <section key={section.key} className="section-panel stack story-status-panel" style={{ gap: 12 }}>
-              <div className="section-panel-header">
+          {!storiesQuery.isLoading &&
+            !storiesQuery.isError &&
+            stories.length > 0 &&
+            filteredStories.length === 0 && (
+              <div className="empty-state empty-state-centered story-section-span">
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
+                <div className="muted" style={{ marginBottom: 14 }}>
+                  No history item matches "{searchValue}".
+                </div>
                 <div>
-                  <h2 style={{ margin: 0 }}>{section.title}</h2>
-                  <div className="muted" style={{ marginTop: 6 }}>
-                    {section.description}
+                  <Button type="button" onClick={() => setSearchValue("")}>
+                    Clear search
+                  </Button>
+                </div>
+              </div>
+            )}
+
+          {!storiesQuery.isLoading &&
+            !storiesQuery.isError &&
+            filteredStories.length > 0 &&
+            storySections.map(section => (
+              <section
+                key={section.key}
+                className="section-panel stack story-status-panel"
+                style={{ gap: 12 }}
+              >
+                <div className="section-panel-header">
+                  <div>
+                    <h2 style={{ margin: 0 }}>{section.title}</h2>
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      {section.description}
+                    </div>
                   </div>
+
+                  <div className="section-count">{section.items.length}</div>
                 </div>
 
-                <div className="section-count">{section.items.length}</div>
-              </div>
+                {section.items.length === 0 ? (
+                  <div className="empty-state empty-state-compact">{section.emptyText}</div>
+                ) : (
+                  <div className="stack" style={{ gap: 12 }}>
+                    {section.items.map(story => (
+                      <article key={story.id} className="story-card stack" style={{ gap: 12 }}>
+                        <div className="story-card-header">
+                          <div className="stack" style={{ gap: 6 }}>
+                            <div style={{ fontWeight: 800, fontSize: 16 }}>{story.name}</div>
+                            <div className="badge-row">
+                              <span className={badgeClassByPriority[story.priority]}>
+                                {story.priority}
+                              </span>
+                              <span className={badgeClassByStatus[story.status]}>
+                                {statusLabel[story.status]}
+                              </span>
+                            </div>
+                          </div>
 
-              {section.items.length === 0 ? (
-                <div className="empty-state empty-state-compact">{section.emptyText}</div>
-              ) : (
-                <div className="stack" style={{ gap: 12 }}>
-                  {section.items.map(story => (
-                    <article key={story.id} className="story-card stack" style={{ gap: 12 }}>
-                      <div className="story-card-header">
-                        <div className="stack" style={{ gap: 6 }}>
-                          <div style={{ fontWeight: 800, fontSize: 16 }}>{story.name}</div>
-                          <div className="badge-row">
-                            <span className={badgeClassByPriority[story.priority]}>
-                              {story.priority}
-                            </span>
-                            <span className={badgeClassByStatus[story.status]}>
-                              {story.status === "todo"
-                                ? "To do"
-                                : story.status === "doing"
-                                  ? "In progress"
-                                  : "Done"}
-                            </span>
+                          <div className="story-actions story-actions-compact">
+                            <Button
+                              type="button"
+                              className="icon-circle-btn"
+                              aria-label="Open story profile"
+                              onClick={() =>
+                                navigate(`/projects/${project.id}/stories/${story.id}`)
+                              }
+                              disabled={isBusy}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                  d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Zm9 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </Button>
+                            <Button
+                              type="button"
+                              className="icon-circle-btn"
+                              aria-label="Edit story"
+                              onClick={() => setEditingStory(story)}
+                              disabled={isBusy}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                  d="m4 16.75 9.95-9.95 3.25 3.25L7.25 20H4v-3.25Zm11.4-11.4 1.1-1.1a1.5 1.5 0 0 1 2.12 0l1.13 1.13a1.5 1.5 0 0 1 0 2.12l-1.1 1.1-3.25-3.25Z"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              className="icon-circle-btn"
+                              aria-label="Delete story"
+                              onClick={() => setStoryToDelete(story)}
+                              disabled={isBusy}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                  d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 8h10l-.7 11.1A2 2 0 0 1 14.3 21H9.7a2 2 0 0 1-1.99-1.9L7 8Z"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </Button>
                           </div>
                         </div>
 
-                        <div className="story-actions">
-                          <Button
-                            type="button"
-                            onClick={() => setEditingStory(story)}
-                            disabled={isBusy}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="danger"
-                            onClick={() => setStoryToDelete(story)}
-                            disabled={isBusy}
-                          >
-                            Delete
-                          </Button>
+                        {story.description ? (
+                          <div className="story-description">{story.description}</div>
+                        ) : (
+                          <div className="muted">No description</div>
+                        )}
+
+                        <div className="story-footer">
+                          <div className="muted">Owner: {getUserName(story.ownerId)}</div>
+                          <div className="muted">Tasks: {taskCountByStoryId.get(story.id) ?? 0}</div>
+                          <div className="muted">Created {dateFormatter.format(story.createdAt)}</div>
                         </div>
-                      </div>
-
-                      {story.description ? (
-                        <div className="story-description">{story.description}</div>
-                      ) : (
-                        <div className="muted">No description</div>
-                      )}
-
-                      <div className="story-footer">
-                        <div className="muted">Owner: {currentUserName}</div>
-                        <div className="muted">Created {dateFormatter.format(story.createdAt)}</div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          ))}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ))}
+        </div>
       </section>
 
       <ModalDialog
@@ -510,6 +605,7 @@ export function ProjectProfilePage() {
         ariaLabel={editingStory ? "Edit history item" : "Create history item"}
       >
         <StoryForm
+          key={editingStory?.id ?? "create-story"}
           initial={editingStory}
           surface="plain"
           submitText={
@@ -545,6 +641,7 @@ export function ProjectProfilePage() {
         ariaLabel="Edit project"
       >
         <ProjectForm
+          key={project.id}
           initial={project}
           surface="plain"
           submitText={updateProjectMutation.isPending ? "Saving..." : "Save changes"}
@@ -564,7 +661,7 @@ export function ProjectProfilePage() {
       <ConfirmDialog
         open={Boolean(storyToDelete)}
         title={storyToDelete ? `Delete "${storyToDelete.name}"?` : "Delete story?"}
-        description="This action cannot be undone."
+        description="This action cannot be undone and also removes every task linked to this history item."
         confirmText="Delete"
         cancelText="Cancel"
         danger
@@ -574,7 +671,7 @@ export function ProjectProfilePage() {
             return;
           }
 
-          await deleteStoryMutation.mutateAsync(storyToDelete.id);
+          await deleteStoryMutation.mutateAsync(storyToDelete);
         }}
         onCancel={() => {
           if (deleteStoryMutation.isPending) {
@@ -588,7 +685,7 @@ export function ProjectProfilePage() {
       <ConfirmDialog
         open={isDeleteProjectOpen}
         title={`Delete "${project.name}"?`}
-        description="This action removes the project and all of its stories. Are you sure you want to delete it?"
+        description="This action removes the project together with all stories and tasks. Are you sure you want to delete it?"
         confirmText="Delete"
         cancelText="Cancel"
         danger
@@ -607,5 +704,3 @@ export function ProjectProfilePage() {
     </div>
   );
 }
-
-
