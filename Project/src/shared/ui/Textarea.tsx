@@ -2,6 +2,7 @@
 // Це набір стандартних HTML-атрибутів для <textarea> з правильною типізацією:
 // value, onChange, rows, placeholder, disabled, aria-*, і т.д.
 import type { TextareaHTMLAttributes } from "react";
+import { cn } from "@shared/lib/cn";
 
 // Компонент Textarea — легка обгортка над стандартним <textarea>,
 // яка додає базовий CSS-клас "textarea" і дозволяє додавати додаткові класи через className.
@@ -15,6 +16,6 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
     // - className додається лише якщо переданий ззовні
     // - filter(Boolean) прибирає порожні значення
     // - join(" ") склеює у фінальний рядок класів
-    <textarea {...props} className={["textarea", className].filter(Boolean).join(" ")} />
+    <textarea {...props} className={cn("textarea", className)} />
   );
 }

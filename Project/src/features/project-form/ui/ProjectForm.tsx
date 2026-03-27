@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Project, ProjectCreateInput } from "@entities/project";
 import { validateProjectInput } from "@entities/project";
 import { Button } from "@shared/ui/Button";
+import { FormError, FormField, FormHeading, FormShell } from "@shared/ui/FormParts";
 import { Input } from "@shared/ui/Input";
 import { Textarea } from "@shared/ui/Textarea";
 
@@ -25,7 +26,6 @@ export function ProjectForm({
   const [error, setError] = useState<string | null>(null);
 
   const title = useMemo(() => (initial ? "Edit project" : "Create project"), [initial]);
-  const formClassName = surface === "card" ? "card stack" : "stack project-form-plain";
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -47,50 +47,35 @@ export function ProjectForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={formClassName} style={{ gap: 12 }}>
-      <div className="stack" style={{ gap: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 20 }}>{title}</div>
-        <div className="muted" style={{ fontSize: 13 }}>
-          {initial
+    <FormShell onSubmit={handleSubmit} surface={surface}>
+      <FormHeading
+        title={title}
+        description={
+          initial
             ? "Update the project name and description."
-            : "Create a new project in the same minimal style as the rest of the workspace."}
-        </div>
-      </div>
+            : "Create a new project in the same minimal style as the rest of the workspace."
+        }
+      />
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Name</div>
+      <FormField label="Name">
         <Input
           value={name}
           onChange={event => setName(event.target.value)}
           placeholder="E.g. Website redesign"
           autoFocus
         />
-      </label>
+      </FormField>
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Description</div>
+      <FormField label="Description">
         <Textarea
           value={description}
           onChange={event => setDescription(event.target.value)}
           rows={5}
           placeholder="Short description..."
         />
-      </label>
+      </FormField>
 
-      {error && (
-        <div
-          className="card card-sm"
-          style={{
-            borderColor: "rgba(255,59,48,0.35)",
-            background: "rgba(255,59,48,0.06)",
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>Error</div>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {error}
-          </div>
-        </div>
-      )}
+      <FormError message={error} />
 
       <div className="form-actions">
         {onCancel && (
@@ -100,6 +85,6 @@ export function ProjectForm({
         )}
         <Button type="submit">{submitText ?? (initial ? "Save" : "Create")}</Button>
       </div>
-    </form>
+    </FormShell>
   );
 }

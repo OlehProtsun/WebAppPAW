@@ -2,6 +2,7 @@
 // Це набір стандартних HTML-атрибутів для <input> з правильною типізацією:
 // value, onChange, placeholder, type, disabled, aria-*, і т.д.
 import type { InputHTMLAttributes } from "react";
+import { cn } from "@shared/lib/cn";
 
 // Компонент Input — легка обгортка над стандартним <input>,
 // яка додає базовий CSS-клас "input" і дозволяє дописувати додаткові класи через className.
@@ -15,6 +16,6 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
     // - додаємо className, якщо він переданий ззовні
     // - filter(Boolean) прибирає undefined/null/"" щоб не було зайвих пробілів
     // - join(" ") з’єднує класи в один рядок
-    <input {...props} className={["input", className].filter(Boolean).join(" ")} />
+    <input {...props} className={cn("input", className)} />
   );
 }

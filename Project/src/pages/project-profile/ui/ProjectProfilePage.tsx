@@ -18,24 +18,8 @@ import { Button } from "@shared/ui/Button";
 import { ConfirmDialog } from "@shared/ui/ConfirmDialog";
 import { Input } from "@shared/ui/Input";
 import { ModalDialog } from "@shared/ui/ModalDialog";
-
-const badgeClassByPriority = {
-  low: "story-badge story-badge-low",
-  medium: "story-badge story-badge-medium",
-  high: "story-badge story-badge-high",
-} as const;
-
-const badgeClassByStatus = {
-  todo: "story-badge story-badge-todo",
-  doing: "story-badge story-badge-doing",
-  done: "story-badge story-badge-done",
-} as const;
-
-const statusLabel = {
-  todo: "To do",
-  doing: "In progress",
-  done: "Done",
-} as const;
+import { EmptyState, ErrorCard, LoadingCard } from "@shared/ui/PageState";
+import { PriorityBadge, StatusBadge } from "@shared/ui/WorkItemBadge";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -331,32 +315,30 @@ export function ProjectProfilePage() {
   }
 
   if (projectsQuery.isLoading) {
-    return <div className="card">Loading project profile...</div>;
+    return <LoadingCard text="Loading project profile..." />;
   }
 
   if (!project) {
     return (
-      <div className="stack" style={{ gap: 18 }}>
+      <div className="stack gap-[18px]">
         <div>
           <Button type="button" onClick={() => navigate("/projects")}>
             Back to projects
           </Button>
         </div>
 
-        <div className="empty-state empty-state-centered">
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Project not found</div>
-          <div className="muted">
-            The project may have been deleted or the link is no longer valid.
-          </div>
-        </div>
+        <EmptyState
+          title="Project not found"
+          description="The project may have been deleted or the link is no longer valid."
+        />
       </div>
     );
   }
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
+    <div className="stack gap-[18px]">
       <section className="profile-top-grid">
-        <header className="card stack project-profile-card story-profile-hero" style={{ gap: 18 }}>
+        <header className="card stack project-profile-card story-profile-hero gap-[18px]">
           <div className="row page-header-row">
             <Button type="button" onClick={() => navigate("/projects")}>
               Back
@@ -381,9 +363,9 @@ export function ProjectProfilePage() {
             </div>
           </div>
 
-          <div className="stack" style={{ gap: 8 }}>
+          <div className="stack gap-2">
             <span className="eyebrow">Project profile</span>
-            <h1 style={{ margin: 0 }}>{project.name}</h1>
+            <h1 className="m-0">{project.name}</h1>
             <p className="muted page-lead project-summary-copy">
               {project.description || "No project description yet."}
             </p>
@@ -414,11 +396,11 @@ export function ProjectProfilePage() {
         </header>
       </section>
 
-      <section className="card stack" style={{ gap: 16 }}>
+      <section className="card stack gap-4">
         <div className="row page-header-row">
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="stack gap-1.5">
             <span className="eyebrow">Kanban</span>
-            <h2 style={{ margin: 0 }}>History board</h2>
+            <h2 className="m-0">History board</h2>
             <p className="muted page-lead">
               Follow the project history by status, search items quickly, and open each
               story profile when you need task details.
@@ -446,22 +428,20 @@ export function ProjectProfilePage() {
         </div>
 
         <div className="story-section-grid">
-          {storiesQuery.isLoading && <div className="card story-section-span">Loading history...</div>}
+          {storiesQuery.isLoading && (
+            <LoadingCard text="Loading history..." className="story-section-span" />
+          )}
 
           {storiesQuery.isError && (
-            <div className="card story-section-span" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading history</div>
-              <div className="muted">Open the console for details.</div>
-            </div>
+            <ErrorCard title="Error loading history" className="story-section-span" />
           )}
 
           {!storiesQuery.isLoading && !storiesQuery.isError && stories.length === 0 && (
-            <div className="empty-state empty-state-centered story-section-span">
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>No history yet</div>
-              <div className="muted" style={{ marginBottom: 14 }}>
-                Add the first history item for this project.
-              </div>
-              <div>
+            <EmptyState
+              title="No history yet"
+              description="Add the first history item for this project."
+              className="story-section-span"
+              action={
                 <Button
                   type="button"
                   className="history-add-btn"
@@ -470,25 +450,24 @@ export function ProjectProfilePage() {
                 >
                   Add story
                 </Button>
-              </div>
-            </div>
+              }
+            />
           )}
 
-          {!storiesQuery.isLoading &&
+        {!storiesQuery.isLoading &&
             !storiesQuery.isError &&
             stories.length > 0 &&
             filteredStories.length === 0 && (
-              <div className="empty-state empty-state-centered story-section-span">
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
-                <div className="muted" style={{ marginBottom: 14 }}>
-                  No history item matches "{searchValue}".
-                </div>
-                <div>
+              <EmptyState
+                title="Nothing found"
+                description={`No history item matches "${searchValue}".`}
+                className="story-section-span"
+                action={
                   <Button type="button" onClick={() => setSearchValue("")}>
                     Clear search
                   </Button>
-                </div>
-              </div>
+                }
+              />
             )}
 
           {!storiesQuery.isLoading &&
@@ -497,13 +476,12 @@ export function ProjectProfilePage() {
             storySections.map(section => (
               <section
                 key={section.key}
-                className="section-panel stack story-status-panel"
-                style={{ gap: 12 }}
+                className="section-panel stack story-status-panel gap-3"
               >
                 <div className="section-panel-header">
                   <div>
-                    <h2 style={{ margin: 0 }}>{section.title}</h2>
-                    <div className="muted" style={{ marginTop: 6 }}>
+                    <h2 className="m-0">{section.title}</h2>
+                    <div className="muted mt-1.5">
                       {section.description}
                     </div>
                   </div>
@@ -514,19 +492,15 @@ export function ProjectProfilePage() {
                 {section.items.length === 0 ? (
                   <div className="empty-state empty-state-compact">{section.emptyText}</div>
                 ) : (
-                  <div className="stack" style={{ gap: 12 }}>
+                  <div className="stack gap-3">
                     {section.items.map(story => (
-                      <article key={story.id} className="story-card stack" style={{ gap: 12 }}>
+                      <article key={story.id} className="story-card stack gap-3">
                         <div className="story-card-header">
-                          <div className="stack" style={{ gap: 6 }}>
-                            <div style={{ fontWeight: 800, fontSize: 16 }}>{story.name}</div>
+                          <div className="stack gap-1.5">
+                            <div className="text-[16px] font-extrabold">{story.name}</div>
                             <div className="badge-row">
-                              <span className={badgeClassByPriority[story.priority]}>
-                                {story.priority}
-                              </span>
-                              <span className={badgeClassByStatus[story.status]}>
-                                {statusLabel[story.status]}
-                              </span>
+                              <PriorityBadge value={story.priority} />
+                              <StatusBadge value={story.status} />
                             </div>
                           </div>
 

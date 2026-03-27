@@ -4,10 +4,12 @@ import { useNavigate } from "react-router";
 import { ActiveProjectApi, PinnedProjectsApi, ProjectsApi } from "@entities/project";
 import { ProjectForm } from "@features/project-form";
 import { LocalStorageClient } from "@shared/api/localStorageClient";
+import { cn } from "@shared/lib/cn";
 import { qk } from "@shared/lib/queryKeys";
 import { Button } from "@shared/ui/Button";
 import { Input } from "@shared/ui/Input";
 import { ModalDialog } from "@shared/ui/ModalDialog";
+import { EmptyState, ErrorCard, LoadingCard } from "@shared/ui/PageState";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -76,12 +78,12 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <header className="card stack projects-header-sticky" style={{ gap: 16 }}>
+    <div className="stack gap-[18px]">
+      <header className="card stack projects-header-sticky gap-4">
         <div className="row page-header-row">
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="stack gap-1.5">
             <span className="eyebrow">Workspace</span>
-            <h1 style={{ margin: 0 }}>Project list</h1>
+            <h1 className="m-0">Project list</h1>
             <p className="muted page-lead">
               Find a project by name, create a new one, open it fast, or pin it to keep it first.
             </p>
@@ -105,44 +107,35 @@ export function ProjectsPage() {
         </div>
       </header>
 
-      {projectsQuery.isLoading && <div className="card">Loading projects...</div>}
+      {projectsQuery.isLoading && <LoadingCard text="Loading projects..." />}
 
-      {projectsQuery.isError && (
-        <div className="card" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading projects</div>
-          <div className="muted">Open the console for details.</div>
-        </div>
-      )}
+      {projectsQuery.isError && <ErrorCard title="Error loading projects" />}
 
       {!projectsQuery.isLoading && !projectsQuery.isError && projects.length === 0 && (
-        <div className="empty-state empty-state-centered">
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>No projects yet</div>
-          <div className="muted" style={{ marginBottom: 14 }}>
-            Start by creating your first project.
-          </div>
-          <div>
+        <EmptyState
+          title="No projects yet"
+          description="Start by creating your first project."
+          action={
             <Button type="button" onClick={() => setIsCreateOpen(true)}>
               Add new
             </Button>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {!projectsQuery.isLoading &&
         !projectsQuery.isError &&
         projects.length > 0 &&
         filteredProjects.length === 0 && (
-          <div className="empty-state empty-state-centered">
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
-            <div className="muted" style={{ marginBottom: 14 }}>
-              No project matches "{searchValue}".
-            </div>
-            <div>
+          <EmptyState
+            title="Nothing found"
+            description={`No project matches "${searchValue}".`}
+            action={
               <Button type="button" onClick={() => setSearchValue("")}>
                 Clear search
               </Button>
-            </div>
-          </div>
+            }
+          />
         )}
 
       {filteredProjects.length > 0 && (
@@ -171,7 +164,7 @@ export function ProjectsPage() {
 
                   <Button
                     type="button"
-                    className={`pin-toggle ${isPinned ? "pin-toggle-active" : ""}`}
+                    className={cn("pin-toggle", isPinned && "pin-toggle-active")}
                     aria-label={isPinned ? "Unpin project" : "Pin project"}
                     aria-pressed={isPinned}
                     disabled={togglePinMutation.isPending}

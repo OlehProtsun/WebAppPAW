@@ -7,26 +7,11 @@ import { TasksApi } from "@entities/task";
 import { UsersApi } from "@entities/user";
 import { LocalStorageClient } from "@shared/api/localStorageClient";
 import { qk } from "@shared/lib/queryKeys";
+import { workItemStatusLabel } from "@shared/lib/workItemPresentation";
 import { Button } from "@shared/ui/Button";
+import { EmptyState, LoadingCard } from "@shared/ui/PageState";
 import { Select } from "@shared/ui/Select";
-
-const badgeClassByPriority = {
-  low: "story-badge story-badge-low",
-  medium: "story-badge story-badge-medium",
-  high: "story-badge story-badge-high",
-} as const;
-
-const badgeClassByStatus = {
-  todo: "story-badge story-badge-todo",
-  doing: "story-badge story-badge-doing",
-  done: "story-badge story-badge-done",
-} as const;
-
-const statusLabel = {
-  todo: "To do",
-  doing: "In progress",
-  done: "Done",
-} as const;
+import { PriorityBadge, StatusBadge } from "@shared/ui/WorkItemBadge";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -180,12 +165,12 @@ export function TaskDetailsPage() {
   const canMarkDone = Boolean(task?.assigneeId) && task?.status === "doing";
 
   if (projectsQuery.isLoading || taskQuery.isLoading || (project && storiesQuery.isLoading)) {
-    return <div className="card">Loading task details...</div>;
+    return <LoadingCard text="Loading task details..." />;
   }
 
   if (!project || !task || !story) {
     return (
-      <div className="stack" style={{ gap: 18 }}>
+      <div className="stack gap-[18px]">
         <div>
           <Button
             type="button"
@@ -197,20 +182,18 @@ export function TaskDetailsPage() {
           </Button>
         </div>
 
-        <div className="empty-state empty-state-centered">
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Task not found</div>
-          <div className="muted">
-            The task may have been deleted or the link no longer matches this project.
-          </div>
-        </div>
+        <EmptyState
+          title="Task not found"
+          description="The task may have been deleted or the link no longer matches this project."
+        />
       </div>
     );
   }
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
+    <div className="stack gap-[18px]">
       <section className="profile-top-grid">
-        <header className="card stack project-profile-card" style={{ gap: 18 }}>
+        <header className="card stack project-profile-card gap-[18px]">
           <div className="row page-header-row">
             <Button
               type="button"
@@ -229,14 +212,12 @@ export function TaskDetailsPage() {
             </div>
           </div>
 
-          <div className="stack" style={{ gap: 8 }}>
+          <div className="stack gap-2">
             <span className="eyebrow">Task details</span>
-            <h1 style={{ margin: 0 }}>{task.name}</h1>
+            <h1 className="m-0">{task.name}</h1>
             <div className="badge-row">
-              <span className={badgeClassByPriority[task.priority]}>{task.priority}</span>
-              <span className={badgeClassByStatus[task.status]}>
-                {statusLabel[task.status]}
-              </span>
+              <PriorityBadge value={task.priority} />
+              <StatusBadge value={task.status} />
             </div>
             <p className="muted page-lead project-summary-copy">
               {task.description || "No task description yet."}
@@ -271,20 +252,18 @@ export function TaskDetailsPage() {
           </div>
         </header>
 
-        <section className="card stack project-history-card" style={{ gap: 16 }}>
-          <div className="stack" style={{ gap: 6 }}>
+        <section className="card stack project-history-card gap-4">
+          <div className="stack gap-1.5">
             <span className="eyebrow">Story</span>
-            <h2 style={{ margin: 0 }}>{story.name}</h2>
+            <h2 className="m-0">{story.name}</h2>
             <p className="muted page-lead">
               {story.description || "No story description yet."}
             </p>
           </div>
 
           <div className="badge-row">
-            <span className={badgeClassByPriority[story.priority]}>{story.priority}</span>
-            <span className={badgeClassByStatus[story.status]}>
-              {statusLabel[story.status]}
-            </span>
+            <PriorityBadge value={story.priority} />
+            <StatusBadge value={story.status} />
           </div>
 
           <div className="story-footer">
@@ -295,10 +274,10 @@ export function TaskDetailsPage() {
       </section>
 
       <section className="profile-top-grid">
-        <section className="card stack project-profile-card" style={{ gap: 16 }}>
-          <div className="stack" style={{ gap: 6 }}>
+        <section className="card stack project-profile-card gap-4">
+          <div className="stack gap-1.5">
             <span className="eyebrow">Timeline</span>
-            <h2 style={{ margin: 0 }}>Task timeline</h2>
+            <h2 className="m-0">Task timeline</h2>
           </div>
 
           <div className="stats-grid stats-grid-wide">
@@ -322,23 +301,23 @@ export function TaskDetailsPage() {
             </div>
             <div className="stat-card">
               <div className="stat-label">Status</div>
-              <div className="stat-value stat-value-sm">{statusLabel[task.status]}</div>
+              <div className="stat-value stat-value-sm">{workItemStatusLabel[task.status]}</div>
             </div>
           </div>
         </section>
 
-        <section className="card stack project-history-card" style={{ gap: 16 }}>
-          <div className="stack" style={{ gap: 6 }}>
+        <section className="card stack project-history-card gap-4">
+          <div className="stack gap-1.5">
             <span className="eyebrow">Actions</span>
-            <h2 style={{ margin: 0 }}>Manage task</h2>
+            <h2 className="m-0">Manage task</h2>
             <p className="muted page-lead">
               Assign a developer or devops person to the task, start it when work begins,
               and close it when the work is finished.
             </p>
           </div>
 
-          <label className="stack" style={{ gap: 6 }}>
-            <div style={{ fontWeight: 700 }}>Responsible person</div>
+          <label className="grid gap-1.5">
+            <div className="font-bold">Responsible person</div>
             <Select
               value={selectedAssigneeId}
               onChange={event => setAssigneeOverrideId(event.target.value)}

@@ -4,6 +4,7 @@
 // - ButtonHTMLAttributes<HTMLButtonElement>: набір стандартних пропсів HTML-кнопки
 //   (type, disabled, onClick, aria-*, і т.д.) з правильною типізацією.
 import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { cn } from "@shared/lib/cn";
 
 // Опис пропсів компонента Button:
 //
@@ -47,5 +48,5 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
   // - об’єднуємо базові класи (v) з додатковими (className),
   // - filter(Boolean) прибирає undefined/""/null (щоб не було зайвих пробілів),
   // - join(" ") робить фінальний рядок класів.
-  return <button {...props} ref={ref} className={[v, className].filter(Boolean).join(" ")} />;
+  return <button {...props} ref={ref} className={cn(v, className)} />;
 });

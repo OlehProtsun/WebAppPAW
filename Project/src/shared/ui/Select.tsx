@@ -1,4 +1,5 @@
 import type { SelectHTMLAttributes } from "react";
+import { cn } from "@shared/lib/cn";
 
 export function Select({
   className,
@@ -7,7 +8,7 @@ export function Select({
   return (
     <select
       {...props}
-      className={["select", className].filter(Boolean).join(" ")}
+      className={cn("select", className)}
     />
   );
 }

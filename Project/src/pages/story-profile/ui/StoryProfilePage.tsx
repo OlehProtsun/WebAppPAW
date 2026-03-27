@@ -12,24 +12,8 @@ import { Button } from "@shared/ui/Button";
 import { ConfirmDialog } from "@shared/ui/ConfirmDialog";
 import { Input } from "@shared/ui/Input";
 import { ModalDialog } from "@shared/ui/ModalDialog";
-
-const badgeClassByPriority = {
-  low: "story-badge story-badge-low",
-  medium: "story-badge story-badge-medium",
-  high: "story-badge story-badge-high",
-} as const;
-
-const badgeClassByStatus = {
-  todo: "story-badge story-badge-todo",
-  doing: "story-badge story-badge-doing",
-  done: "story-badge story-badge-done",
-} as const;
-
-const statusLabel = {
-  todo: "To do",
-  doing: "In progress",
-  done: "Done",
-} as const;
+import { EmptyState, ErrorCard, LoadingCard } from "@shared/ui/PageState";
+import { PriorityBadge, StatusBadge } from "@shared/ui/WorkItemBadge";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -266,7 +250,7 @@ export function StoryProfilePage() {
     usersQuery.isLoading ||
     currentUserQuery.isLoading
   ) {
-    return <div className="card">Loading story profile...</div>;
+    return <LoadingCard text="Loading story profile..." />;
   }
 
   if (
@@ -277,7 +261,7 @@ export function StoryProfilePage() {
     currentUserQuery.isError
   ) {
     return (
-      <div className="stack" style={{ gap: 18 }}>
+      <div className="stack gap-[18px]">
         <div>
           <Button
             type="button"
@@ -287,17 +271,14 @@ export function StoryProfilePage() {
           </Button>
         </div>
 
-        <div className="card" style={{ borderColor: "rgba(255,59,48,0.35)" }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Error loading story profile</div>
-          <div className="muted">Open the console for details.</div>
-        </div>
+        <ErrorCard title="Error loading story profile" />
       </div>
     );
   }
 
   if (!project || !story) {
     return (
-      <div className="stack" style={{ gap: 18 }}>
+      <div className="stack gap-[18px]">
         <div>
           <Button
             type="button"
@@ -307,34 +288,30 @@ export function StoryProfilePage() {
           </Button>
         </div>
 
-        <div className="empty-state empty-state-centered">
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>History profile not found</div>
-          <div className="muted">
-            The story may have been deleted or the link no longer matches this project.
-          </div>
-        </div>
+        <EmptyState
+          title="History profile not found"
+          description="The story may have been deleted or the link no longer matches this project."
+        />
       </div>
     );
   }
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
+    <div className="stack gap-[18px]">
       <section className="profile-top-grid">
-        <header className="card stack project-profile-card story-profile-hero" style={{ gap: 18 }}>
+        <header className="card stack project-profile-card story-profile-hero gap-[18px]">
           <div className="row page-header-row">
             <Button type="button" onClick={() => navigate(`/projects/${project.id}`)}>
               Back to project
             </Button>
           </div>
 
-          <div className="stack" style={{ gap: 8 }}>
+          <div className="stack gap-2">
             <span className="eyebrow">Story profile</span>
-            <h1 style={{ margin: 0 }}>{story.name}</h1>
+            <h1 className="m-0">{story.name}</h1>
             <div className="badge-row">
-              <span className={badgeClassByPriority[story.priority]}>{story.priority}</span>
-              <span className={badgeClassByStatus[story.status]}>
-                {statusLabel[story.status]}
-              </span>
+              <PriorityBadge value={story.priority} />
+              <StatusBadge value={story.status} />
             </div>
             <p className="muted page-lead project-summary-copy">
               {story.description || "No story description yet."}
@@ -374,11 +351,11 @@ export function StoryProfilePage() {
         </header>
       </section>
 
-      <section className="card stack" style={{ gap: 16 }}>
+      <section className="card stack gap-4">
         <div className="row page-header-row">
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="stack gap-1.5">
             <span className="eyebrow">Kanban</span>
-            <h2 style={{ margin: 0 }}>Task board</h2>
+            <h2 className="m-0">Task board</h2>
             <p className="muted page-lead">
               Follow the work inside this history item and open task details when you
               need to assign, start, or close a task.
@@ -407,12 +384,11 @@ export function StoryProfilePage() {
 
         <div className="story-section-grid">
           {storyTasks.length === 0 && (
-            <div className="empty-state empty-state-centered story-section-span">
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>No tasks yet</div>
-              <div className="muted" style={{ marginBottom: 14 }}>
-                Add the first task to start organizing the work inside this history item.
-              </div>
-              <div>
+            <EmptyState
+              title="No tasks yet"
+              description="Add the first task to start organizing the work inside this history item."
+              className="story-section-span"
+              action={
                 <Button
                   type="button"
                   className="history-add-btn"
@@ -421,35 +397,33 @@ export function StoryProfilePage() {
                 >
                   Add task
                 </Button>
-              </div>
-            </div>
+              }
+            />
           )}
 
           {storyTasks.length > 0 && filteredTasks.length === 0 && (
-            <div className="empty-state empty-state-centered story-section-span">
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>Nothing found</div>
-              <div className="muted" style={{ marginBottom: 14 }}>
-                No task matches "{searchValue}".
-              </div>
-              <div>
+            <EmptyState
+              title="Nothing found"
+              description={`No task matches "${searchValue}".`}
+              className="story-section-span"
+              action={
                 <Button type="button" onClick={() => setSearchValue("")}>
                   Clear search
                 </Button>
-              </div>
-            </div>
+              }
+            />
           )}
 
           {filteredTasks.length > 0 &&
             taskColumns.map(column => (
               <section
                 key={column.key}
-                className="section-panel stack story-status-panel"
-                style={{ gap: 12 }}
+                className="section-panel stack story-status-panel gap-3"
               >
                 <div className="section-panel-header">
                   <div>
-                    <h2 style={{ margin: 0 }}>{column.title}</h2>
-                    <div className="muted" style={{ marginTop: 6 }}>
+                    <h2 className="m-0">{column.title}</h2>
+                    <div className="muted mt-1.5">
                       {column.description}
                     </div>
                   </div>
@@ -460,19 +434,15 @@ export function StoryProfilePage() {
                 {column.items.length === 0 ? (
                   <div className="empty-state empty-state-compact">{column.emptyText}</div>
                 ) : (
-                  <div className="stack" style={{ gap: 12 }}>
+                  <div className="stack gap-3">
                     {column.items.map(task => (
-                      <article key={task.id} className="story-card stack" style={{ gap: 12 }}>
+                      <article key={task.id} className="story-card stack gap-3">
                         <div className="story-card-header">
-                          <div className="stack" style={{ gap: 6 }}>
-                            <div style={{ fontWeight: 800, fontSize: 16 }}>{task.name}</div>
+                          <div className="stack gap-1.5">
+                            <div className="text-[16px] font-extrabold">{task.name}</div>
                             <div className="badge-row">
-                              <span className={badgeClassByPriority[task.priority]}>
-                                {task.priority}
-                              </span>
-                              <span className={badgeClassByStatus[task.status]}>
-                                {statusLabel[task.status]}
-                              </span>
+                              <PriorityBadge value={task.priority} />
+                              <StatusBadge value={task.status} />
                             </div>
                           </div>
 

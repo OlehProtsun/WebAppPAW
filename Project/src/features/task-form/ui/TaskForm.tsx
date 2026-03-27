@@ -6,6 +6,7 @@ import {
   validateTaskInput,
 } from "@entities/task";
 import { Button } from "@shared/ui/Button";
+import { FormError, FormField, FormHeading, FormShell } from "@shared/ui/FormParts";
 import { Input } from "@shared/ui/Input";
 import { Select } from "@shared/ui/Select";
 import { Textarea } from "@shared/ui/Textarea";
@@ -37,7 +38,6 @@ export function TaskForm({
   );
   const [error, setError] = useState<string | null>(null);
 
-  const formClassName = surface === "card" ? "card stack" : "stack project-form-plain";
   const title = useMemo(() => (initial ? "Edit task" : "Create task"), [initial]);
 
   async function handleSubmit(event: FormEvent) {
@@ -71,39 +71,36 @@ export function TaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={formClassName} style={{ gap: 12 }}>
-      <div className="stack" style={{ gap: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 20 }}>{title}</div>
-        <div className="muted" style={{ fontSize: 13 }}>
-          {initial
+    <FormShell onSubmit={handleSubmit} surface={surface}>
+      <FormHeading
+        title={title}
+        description={
+          initial
             ? "Update the task details and save your changes. Status and assignee stay managed in task details."
-            : "Add a task to one of the project history items. New tasks always start as To do."}
-        </div>
-      </div>
+            : "Add a task to one of the project history items. New tasks always start as To do."
+        }
+      />
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Name</div>
+      <FormField label="Name">
         <Input
           value={name}
           onChange={event => setName(event.target.value)}
           placeholder="E.g. Configure CI pipeline"
           autoFocus
         />
-      </label>
+      </FormField>
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Description</div>
+      <FormField label="Description">
         <Textarea
           value={description}
           onChange={event => setDescription(event.target.value)}
           rows={5}
           placeholder="Describe the expected task output..."
         />
-      </label>
+      </FormField>
 
       <div className="form-grid">
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Story</div>
+        <FormField label="Story">
           <Select
             value={storyId}
             onChange={event => setStoryId(event.target.value)}
@@ -116,10 +113,9 @@ export function TaskForm({
               </option>
             ))}
           </Select>
-        </label>
+        </FormField>
 
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Estimated time (hours)</div>
+        <FormField label="Estimated time (hours)">
           <Input
             type="number"
             min="0.25"
@@ -128,12 +124,11 @@ export function TaskForm({
             onChange={event => setEstimatedHours(event.target.value)}
             placeholder="E.g. 6"
           />
-        </label>
+        </FormField>
       </div>
 
       <div className="form-grid">
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Priority</div>
+        <FormField label="Priority">
           <Select
             value={priority}
             onChange={event => setPriority(event.target.value as typeof priority)}
@@ -142,23 +137,10 @@ export function TaskForm({
             <option value="medium">Medium</option>
             <option value="high">High</option>
           </Select>
-        </label>
+        </FormField>
       </div>
 
-      {error && (
-        <div
-          className="card card-sm"
-          style={{
-            borderColor: "rgba(255,59,48,0.35)",
-            background: "rgba(255,59,48,0.06)",
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>Error</div>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {error}
-          </div>
-        </div>
-      )}
+      <FormError message={error} />
 
       <div className="form-actions">
         {onCancel && (
@@ -168,6 +150,6 @@ export function TaskForm({
         )}
         <Button type="submit">{submitText ?? (initial ? "Save" : "Create")}</Button>
       </div>
-    </form>
+    </FormShell>
   );
 }

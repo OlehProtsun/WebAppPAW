@@ -4,13 +4,9 @@ import { ProjectProfilePage } from "@pages/project-profile";
 import { ProjectsPage } from "@pages/projects";
 import { StoryProfilePage } from "@pages/story-profile";
 import { TaskDetailsPage } from "@pages/task-details";
+import { ErrorCard } from "@shared/ui/PageState";
 
-const routeErrorElement = (
-  <div className="card">
-    <h2 style={{ marginTop: 0 }}>Navigation error</h2>
-    <div className="muted">Check the console for details.</div>
-  </div>
-);
+const routeErrorElement = <ErrorCard title="Navigation error" />;
 
 export const router = createBrowserRouter(
   [

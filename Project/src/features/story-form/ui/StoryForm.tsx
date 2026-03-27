@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Story, StoryFormValues } from "@entities/story";
 import { validateStoryInput } from "@entities/story";
 import { Button } from "@shared/ui/Button";
+import { FormError, FormField, FormHeading, FormShell } from "@shared/ui/FormParts";
 import { Input } from "@shared/ui/Input";
 import { Select } from "@shared/ui/Select";
 import { Textarea } from "@shared/ui/Textarea";
@@ -31,8 +32,6 @@ export function StoryForm({
   );
   const [error, setError] = useState<string | null>(null);
 
-  const formClassName = surface === "card" ? "card stack" : "stack project-form-plain";
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -60,41 +59,36 @@ export function StoryForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={formClassName} style={{ gap: 12 }}>
-      <div className="stack" style={{ gap: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 20 }}>
-          {initial ? "Edit history item" : "Create history item"}
-        </div>
-        <div className="muted" style={{ fontSize: 13 }}>
-          {initial
+    <FormShell onSubmit={handleSubmit} surface={surface}>
+      <FormHeading
+        title={initial ? "Edit history item" : "Create history item"}
+        description={
+          initial
             ? "Update the history item details and save your changes."
-            : "Add a new history item to the current project."}
-        </div>
-      </div>
+            : "Add a new history item to the current project."
+        }
+      />
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Name</div>
+      <FormField label="Name">
         <Input
           value={name}
           onChange={event => setName(event.target.value)}
           placeholder="E.g. Improve onboarding"
           autoFocus
         />
-      </label>
+      </FormField>
 
-      <label className="stack" style={{ gap: 6 }}>
-        <div style={{ fontWeight: 700 }}>Description</div>
+      <FormField label="Description">
         <Textarea
           value={description}
           onChange={event => setDescription(event.target.value)}
           rows={5}
           placeholder="Describe the expected outcome..."
         />
-      </label>
+      </FormField>
 
       <div className="form-grid">
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Priority</div>
+        <FormField label="Priority">
           <Select
             value={priority}
             onChange={event =>
@@ -105,10 +99,12 @@ export function StoryForm({
             <option value="medium">Medium</option>
             <option value="high">High</option>
           </Select>
-        </label>
+        </FormField>
 
-        <label className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 700 }}>Status</div>
+        <FormField
+          label="Status"
+          hint={initial ? "Status is managed automatically by task progress." : undefined}
+        >
           <Select
             value={status}
             disabled={Boolean(initial)}
@@ -120,28 +116,10 @@ export function StoryForm({
             <option value="doing">In progress</option>
             <option value="done">Done</option>
           </Select>
-          {initial && (
-            <div className="muted" style={{ fontSize: 12 }}>
-              Status is managed automatically by task progress.
-            </div>
-          )}
-        </label>
+        </FormField>
       </div>
 
-      {error && (
-        <div
-          className="card card-sm"
-          style={{
-            borderColor: "rgba(255,59,48,0.35)",
-            background: "rgba(255,59,48,0.06)",
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>Error</div>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {error}
-          </div>
-        </div>
-      )}
+      <FormError message={error} />
 
       <div className="form-actions">
         {onCancel && (
@@ -169,6 +147,6 @@ export function StoryForm({
           {submitText ?? (initial ? "Save" : "Create")}
         </Button>
       </div>
-    </form>
+    </FormShell>
   );
 }
